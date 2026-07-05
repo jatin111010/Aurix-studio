@@ -22,6 +22,8 @@ export type PhotoroomEditOptions = {
   /** Omit or pass null when using AI backgrounds (they already include shadows). */
   shadowMode?: "ai.soft" | "ai.hard" | "ai.floating" | null;
   padding?: number;
+  /** Tight crop to product subject — die-cut / sticker style */
+  outputSize?: "auto" | "originalImage" | "croppedSubject" | string;
 };
 
 function getMode(): PhotoroomMode {
@@ -90,6 +92,10 @@ export async function editImage(
   }
   form.append("padding", String(options.padding ?? 0.1));
 
+  if (options.outputSize) {
+    form.append("outputSize", options.outputSize);
+  }
+
   const response = await fetch(PHOTOROOM_EDIT_URL, {
     method: "POST",
     headers: {
@@ -104,6 +110,59 @@ export async function editImage(
     const detail = await response.text().catch(() => "");
     throw new Error(
       `Photoroom ${getMode()} error ${response.status}: ${detail || response.statusText}`,
+    );
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Die-cut: remove background, transparent PNG, cropped tight to the product.
+ * @see https://docs.photoroom.com/tutorials/how-to-create-sticker-images
+ */
+export async function diecutImage(
+  options: Pick<
+    PhotoroomEditOptions,
+    "imageUrl" | "imageFile" | "imageFileName" | "padding"
+  >,
+): Promise<Buffer> {
+  const apiKey = getPhotoroomApiKey();
+  const form = new FormData();
+
+  if (options.imageFile) {
+    const blob =
+      options.imageFile instanceof Blob
+        ? options.imageFile
+        : new Blob([new Uint8Array(options.imageFile)]);
+    form.append(
+      "imageFile",
+      blob,
+      options.imageFileName ?? "product.jpg",
+    );
+  } else if (options.imageUrl) {
+    form.append("imageUrl", options.imageUrl);
+  } else {
+    throw new Error("Provide imageFile or imageUrl");
+  }
+
+  form.append("removeBackground", "true");
+  form.append("background.color", "transparent");
+  form.append("background.scaling", "fill");
+  form.append("outputSize", "croppedSubject");
+  form.append("padding", String(options.padding ?? 0.05));
+  form.append("export.format", "png");
+
+  const response = await fetch(PHOTOROOM_EDIT_URL, {
+    method: "POST",
+    headers: { "x-api-key": apiKey },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Photoroom die-cut ${getMode()} error ${response.status}: ${detail || response.statusText}`,
     );
   }
 

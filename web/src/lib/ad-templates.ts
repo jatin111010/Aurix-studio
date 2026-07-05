@@ -56,7 +56,12 @@ export const AD_TEMPLATES: Record<AdTemplateId, AdTemplate> = {
 
 export const AD_SIZE = 1080;
 
-/** Pick template from background vibe (or default). */
+/** Get template by user choice (not auto from background). */
+export function getAdTemplate(id: AdTemplateId): AdTemplate {
+  return AD_TEMPLATES[id];
+}
+
+/** @deprecated use getAdTemplate with user-selected style */
 export function pickAdTemplate(backgroundId: string): AdTemplate {
   if (backgroundId === "sunlight") return AD_TEMPLATES.bold;
   if (backgroundId === "marble") return AD_TEMPLATES.minimal;

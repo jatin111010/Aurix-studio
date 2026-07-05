@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-
-const BACKGROUNDS = [
-  { id: "marble", label: "Marble" },
-  { id: "wood", label: "Wood" },
-  { id: "studio", label: "Soft studio" },
-  { id: "sunlight", label: "Bright sunlight" },
-];
+import {
+  BACKGROUND_CUSTOM_ID,
+  BACKGROUNDS,
+  CUSTOM_BACKGROUND_CHOICE,
+} from "@/lib/config";
 
 export function SandboxTester() {
   const [file, setFile] = useState<File | null>(null);
   const [backgroundId, setBackgroundId] = useState("studio");
+  const [studioStyle, setStudioStyle] = useState<"scene" | "diecut">("scene");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +24,11 @@ export function SandboxTester() {
       return;
     }
 
+    if (studioStyle === "scene" && backgroundId === BACKGROUND_CUSTOM_ID && customPrompt.trim().length < 5) {
+      setError("Describe your custom background (at least 5 characters).");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setPreviewUrl(null);
@@ -32,7 +37,13 @@ export function SandboxTester() {
     try {
       const form = new FormData();
       form.append("image", file);
-      form.append("backgroundId", backgroundId);
+      form.append("studioStyle", studioStyle);
+      if (studioStyle === "scene") {
+        form.append("backgroundId", backgroundId);
+        if (backgroundId === BACKGROUND_CUSTOM_ID) {
+          form.append("customBackgroundPrompt", customPrompt.trim());
+        }
+      }
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -78,20 +89,58 @@ export function SandboxTester() {
 
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Background
+          Studio style
         </label>
         <select
-          value={backgroundId}
-          onChange={(e) => setBackgroundId(e.target.value)}
+          value={studioStyle}
+          onChange={(e) =>
+            setStudioStyle(e.target.value as "scene" | "diecut")
+          }
           className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
         >
-          {BACKGROUNDS.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.label}
-            </option>
-          ))}
+          <option value="scene">With AI background scene</option>
+          <option value="diecut">Die-cut (transparent PNG)</option>
         </select>
       </div>
+
+      {studioStyle === "scene" && (
+        <>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">
+              Background
+            </label>
+            <select
+              value={backgroundId}
+              onChange={(e) => setBackgroundId(e.target.value)}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            >
+              {BACKGROUNDS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+              <option value={BACKGROUND_CUSTOM_ID}>
+                {CUSTOM_BACKGROUND_CHOICE.label}
+              </option>
+            </select>
+          </div>
+
+          {backgroundId === BACKGROUND_CUSTOM_ID && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                Your background idea
+              </label>
+              <input
+                type="text"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="e.g. rustic wooden kitchen counter"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <button
         type="submit"

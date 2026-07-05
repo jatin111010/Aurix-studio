@@ -1,20 +1,49 @@
 import {
   Circle,
   FabricImage,
-  FabricText,
   Gradient,
   Rect,
   StaticCanvas,
   type StaticCanvas as StaticCanvasType,
 } from "fabric/node";
+import sharp from "sharp";
 import {
   AD_SIZE,
-  pickAdTemplate,
+  getAdTemplate,
   type AdTemplate,
+  type AdTemplateId,
 } from "@/lib/ad-templates";
 import type { AdCopyContent } from "@/lib/openai";
 
 export type { AdCopyContent };
+
+const FONT = "DejaVu Sans, Liberation Sans, Arial, sans-serif";
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .slice(0, 80);
+}
+
+function wrapHeadline(text: string, maxChars = 28): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 2);
+}
 
 function canvasToPngBuffer(canvas: StaticCanvasType): Promise<Buffer> {
   canvas.renderAll();
@@ -70,160 +99,139 @@ function layoutProduct(img: FabricImage): void {
   });
 }
 
-function addHeadline(
+function addBadgeShape(
   canvas: StaticCanvasType,
-  text: string,
   template: AdTemplate,
-): void {
-  const headline = new FabricText(text, {
-    left: AD_SIZE / 2,
-    top: AD_SIZE * 0.08,
-    originX: "center",
-    originY: "top",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontWeight: "700",
-    fontSize: 56,
-    fill: template.headlineColor,
-    textAlign: "center",
-    width: AD_SIZE - 120,
-  });
-  canvas.add(headline);
-}
-
-function addSubheadline(
-  canvas: StaticCanvasType,
-  text: string,
-  template: AdTemplate,
-): void {
-  const sub = new FabricText(text, {
-    left: AD_SIZE / 2,
-    top: AD_SIZE * 0.17,
-    originX: "center",
-    originY: "top",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontSize: 28,
-    fill: template.subColor,
-    textAlign: "center",
-    width: AD_SIZE - 140,
-  });
-  canvas.add(sub);
-}
-
-function addBadge(
-  canvas: StaticCanvasType,
-  text: string,
-  template: AdTemplate,
-): void {
+): { cx: number; cy: number } | null {
   const badgeW = 200;
   const badgeH = 56;
   const left = AD_SIZE - badgeW - 36;
   const top = 36;
 
-  const pill = new Rect({
-    left,
-    top,
-    width: badgeW,
-    height: badgeH,
-    rx: 28,
-    ry: 28,
-    fill: template.badgeBg,
-    selectable: false,
-    evented: false,
-  });
-  canvas.add(pill);
+  canvas.add(
+    new Rect({
+      left,
+      top,
+      width: badgeW,
+      height: badgeH,
+      rx: 28,
+      ry: 28,
+      fill: template.badgeBg,
+      selectable: false,
+      evented: false,
+    }),
+  );
 
-  const label = new FabricText(text, {
-    left: left + badgeW / 2,
-    top: top + badgeH / 2,
-    originX: "center",
-    originY: "center",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontWeight: "700",
-    fontSize: 26,
-    fill: template.badgeText,
-    textAlign: "center",
-  });
-  canvas.add(label);
+  return { cx: left + badgeW / 2, cy: top + badgeH / 2 };
 }
 
-function addCtaButton(
+function addCtaShape(
   canvas: StaticCanvasType,
-  text: string,
   template: AdTemplate,
-): void {
+): { cx: number; cy: number } {
   const btnW = 360;
   const btnH = 64;
   const left = (AD_SIZE - btnW) / 2;
   const top = AD_SIZE * 0.86;
 
-  const btn = new Rect({
-    left,
-    top,
-    width: btnW,
-    height: btnH,
-    rx: 32,
-    ry: 32,
-    fill: template.ctaBg,
-    selectable: false,
-    evented: false,
-  });
-  canvas.add(btn);
+  canvas.add(
+    new Rect({
+      left,
+      top,
+      width: btnW,
+      height: btnH,
+      rx: 32,
+      ry: 32,
+      fill: template.ctaBg,
+      selectable: false,
+      evented: false,
+    }),
+  );
 
-  const label = new FabricText(text, {
-    left: AD_SIZE / 2,
-    top: top + btnH / 2,
-    originX: "center",
-    originY: "center",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontWeight: "700",
-    fontSize: 28,
-    fill: template.ctaText,
-    textAlign: "center",
-  });
-  canvas.add(label);
+  return { cx: AD_SIZE / 2, cy: top + btnH / 2 };
 }
 
 function addProductFrame(canvas: StaticCanvasType, template: AdTemplate): void {
-  const frame = new Circle({
-    left: AD_SIZE / 2,
-    top: AD_SIZE * 0.56,
-    radius: AD_SIZE * 0.36,
-    fill: "rgba(255,255,255,0.08)",
-    stroke: template.accent,
-    strokeWidth: 3,
-    originX: "center",
-    originY: "center",
-    selectable: false,
-    evented: false,
-  });
-  canvas.add(frame);
+  canvas.add(
+    new Circle({
+      left: AD_SIZE / 2,
+      top: AD_SIZE * 0.56,
+      radius: AD_SIZE * 0.36,
+      fill: "rgba(255,255,255,0.08)",
+      stroke: template.accent,
+      strokeWidth: 3,
+      originX: "center",
+      originY: "center",
+      selectable: false,
+      evented: false,
+    }),
+  );
+}
+
+/** SVG text overlay — works on Vercel/Linux (FabricText does not). */
+function buildTextOverlaySvg(
+  copy: AdCopyContent,
+  template: AdTemplate,
+  badge: { cx: number; cy: number } | null,
+  cta: { cx: number; cy: number },
+): string {
+  const headlineLines = wrapHeadline(copy.headline);
+  const headlineY = AD_SIZE * 0.1;
+  const lineHeight = 62;
+
+  const headlineSvg = headlineLines
+    .map(
+      (line, i) =>
+        `<text x="${AD_SIZE / 2}" y="${headlineY + i * lineHeight}" font-family="${FONT}" font-size="52" font-weight="700" fill="${template.headlineColor}" text-anchor="middle">${escapeXml(line)}</text>`,
+    )
+    .join("\n");
+
+  return `<svg width="${AD_SIZE}" height="${AD_SIZE}" xmlns="http://www.w3.org/2000/svg">
+  ${headlineSvg}
+  <text x="${AD_SIZE / 2}" y="${AD_SIZE * 0.22}" font-family="${FONT}" font-size="28" fill="${template.subColor}" text-anchor="middle">${escapeXml(copy.subheadline)}</text>
+  ${badge && copy.badge ? `<text x="${badge.cx}" y="${badge.cy + 10}" font-family="${FONT}" font-size="26" font-weight="700" fill="${template.badgeText}" text-anchor="middle">${escapeXml(copy.badge)}</text>` : ""}
+  <text x="${cta.cx}" y="${cta.cy + 10}" font-family="${FONT}" font-size="28" font-weight="700" fill="${template.ctaText}" text-anchor="middle">${escapeXml(copy.cta)}</text>
+</svg>`;
+}
+
+async function applyTextOverlay(
+  basePng: Buffer,
+  copy: AdCopyContent,
+  template: AdTemplate,
+  badge: { cx: number; cy: number } | null,
+  cta: { cx: number; cy: number },
+): Promise<Buffer> {
+  const svg = buildTextOverlaySvg(copy, template, badge, cta);
+  return sharp(basePng)
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .png()
+    .toBuffer();
 }
 
 /**
- * Build a full social ad post: Fabric.js layout + Photoroom product hero image.
+ * Fabric.js layout (shapes + product) + Sharp SVG text overlay.
  */
 export async function compositeAdPost(
   productPng: Buffer,
   copy: AdCopyContent,
-  backgroundId: string,
+  templateId: AdTemplateId,
 ): Promise<Buffer> {
-  const template = pickAdTemplate(backgroundId);
+  const template = getAdTemplate(templateId);
   const canvas = new StaticCanvas(undefined, {
     width: AD_SIZE,
     height: AD_SIZE,
   });
 
   addBackground(canvas, template);
-  addHeadline(canvas, copy.headline, template);
-  addSubheadline(canvas, copy.subheadline, template);
-  addBadge(canvas, copy.badge, template);
+  const badge = copy.badge ? addBadgeShape(canvas, template) : null;
   addProductFrame(canvas, template);
 
   const product = await loadProductImage(productPng);
   layoutProduct(product);
   canvas.add(product);
 
-  addCtaButton(canvas, copy.cta, template);
+  const cta = addCtaShape(canvas, template);
 
-  return canvasToPngBuffer(canvas);
+  const basePng = await canvasToPngBuffer(canvas);
+  return applyTextOverlay(basePng, copy, template, badge, cta);
 }

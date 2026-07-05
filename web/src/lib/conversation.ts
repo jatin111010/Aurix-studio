@@ -3,7 +3,20 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export type ConversationStep =
   | "start"
   | "awaiting_mode"
+  | "awaiting_studio_style"
   | "awaiting_background"
+  | "awaiting_custom_background"
+  | "ad_awaiting_style"
+  | "ad_awaiting_purpose"
+  | "ad_awaiting_offer"
+  | "ad_awaiting_cta"
+  | "ad_awaiting_headline_mode"
+  | "ad_awaiting_headline_text"
+  | "ad_awaiting_message_mode"
+  | "ad_awaiting_message_text"
+  | "ad_awaiting_background"
+  | "ad_awaiting_custom_background"
+  | "ad_awaiting_confirm"
   | "generating";
 
 export type ConversationRow = {

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BACKGROUNDS } from "@/lib/config";
-import { editImage, getPhotoroomMode } from "@/lib/photoroom";
+import { resolveBackground } from "@/lib/backgrounds";
+import { diecutImage, editImage, getPhotoroomMode } from "@/lib/photoroom";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
  * Test endpoint for Photoroom (sandbox by default).
- * POST multipart: image (file) + optional backgroundId
- * or JSON: { imageUrl, backgroundId }
+ * POST multipart: image (file) + optional backgroundId + optional studioStyle=diecut
+ * or JSON: { imageUrl, backgroundId, studioStyle }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
     let imageFile: Blob | undefined;
     let imageUrl: string | undefined;
     let backgroundId = "studio";
+    let customBackgroundPrompt: string | undefined;
+    let studioStyle = "scene";
 
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
@@ -32,20 +34,26 @@ export async function POST(request: NextRequest) {
       }
       const bg = form.get("backgroundId");
       if (typeof bg === "string" && bg) backgroundId = bg;
+      const custom = form.get("customBackgroundPrompt");
+      if (typeof custom === "string" && custom) customBackgroundPrompt = custom;
+      const style = form.get("studioStyle");
+      if (typeof style === "string" && style) studioStyle = style;
       const url = form.get("imageUrl");
       if (typeof url === "string" && url) imageUrl = url;
     } else {
       const body = (await request.json()) as {
         imageUrl?: string;
         backgroundId?: string;
+        customBackgroundPrompt?: string;
+        studioStyle?: string;
       };
       imageUrl = body.imageUrl;
       if (body.backgroundId) backgroundId = body.backgroundId;
+      if (body.customBackgroundPrompt) {
+        customBackgroundPrompt = body.customBackgroundPrompt;
+      }
+      if (body.studioStyle) studioStyle = body.studioStyle;
     }
-
-    const background = BACKGROUNDS.find((b) => b.id === backgroundId);
-    const backgroundPrompt =
-      background?.prompt ?? "clean soft studio backdrop";
 
     if (!imageFile && !imageUrl) {
       return NextResponse.json(
@@ -53,6 +61,22 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    if (studioStyle === "diecut") {
+      const png = await diecutImage({ imageFile, imageUrl, padding: 0.05 });
+      return new NextResponse(new Uint8Array(png), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/png",
+          "X-Photoroom-Mode": getPhotoroomMode(),
+          "X-Studio-Style": "diecut",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    const background = resolveBackground(backgroundId, customBackgroundPrompt);
+    const backgroundPrompt = background.prompt;
 
     const png = await editImage({
       imageFile,

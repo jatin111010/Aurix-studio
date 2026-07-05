@@ -1,7 +1,9 @@
-import { BACKGROUNDS } from "@/lib/config";
+import { resolveBackground } from "@/lib/backgrounds";
+import { briefToAdCopy, resolveAdBrief, type AdBrief } from "@/lib/ad-brief";
 import { compositeAdPost } from "@/lib/ad-composite";
-import { generateAdCopy, type AdCopyContent } from "@/lib/openai";
-import { editImage, getPhotoroomMode } from "@/lib/photoroom";
+import type { AdCopyContent } from "@/lib/openai";
+import type { AdChoices } from "@/lib/ad-options";
+import { diecutImage, editImage, getPhotoroomMode } from "@/lib/photoroom";
 import { uploadOutputPng } from "@/lib/storage";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
@@ -13,44 +15,66 @@ import {
 export type BuiltStudioImage = {
   png: Buffer;
   backgroundId: string;
+  studioStyle: "scene" | "diecut";
   photoroomMode: string;
 };
 
 export type BuiltAdImage = BuiltStudioImage & {
   adCopy: AdCopyContent;
+  adBrief: AdBrief;
 };
 
 export async function buildStudioImage(
   inputImageUrl: string,
   backgroundId: string,
+  customBackgroundPrompt?: string,
 ): Promise<BuiltStudioImage> {
-  const background = BACKGROUNDS.find((b) => b.id === backgroundId);
-  const backgroundPrompt =
-    background?.prompt ?? "clean soft studio backdrop";
+  const background = resolveBackground(backgroundId, customBackgroundPrompt);
 
   const png = await editImage({
     imageUrl: inputImageUrl,
-    backgroundPrompt,
+    backgroundPrompt: background.prompt,
     padding: 0.1,
   });
 
   return {
     png,
-    backgroundId,
+    backgroundId: background.id,
+    studioStyle: "scene",
+    photoroomMode: getPhotoroomMode(),
+  };
+}
+
+export async function buildDiecutImage(
+  inputImageUrl: string,
+): Promise<BuiltStudioImage> {
+  const png = await diecutImage({
+    imageUrl: inputImageUrl,
+    padding: 0.05,
+  });
+
+  return {
+    png,
+    backgroundId: "diecut",
+    studioStyle: "diecut",
     photoroomMode: getPhotoroomMode(),
   };
 }
 
 export async function buildAdImage(
   inputImageUrl: string,
-  backgroundId: string,
+  choices: AdChoices,
 ): Promise<BuiltAdImage> {
-  const built = await buildStudioImage(inputImageUrl, backgroundId);
-  const background = BACKGROUNDS.find((b) => b.id === backgroundId);
-  const adCopy = await generateAdCopy(background?.label);
-  const png = await compositeAdPost(built.png, adCopy, backgroundId);
+  const brief = await resolveAdBrief(choices);
+  const built = await buildStudioImage(
+    inputImageUrl,
+    brief.backgroundId,
+    brief.customBackgroundPrompt,
+  );
+  const adCopy = briefToAdCopy(brief);
+  const png = await compositeAdPost(built.png, adCopy, brief.templateId);
 
-  return { ...built, png, adCopy };
+  return { ...built, png, adCopy, adBrief: brief };
 }
 
 export async function saveStudioGeneration(
@@ -69,7 +93,10 @@ export async function saveStudioGeneration(
     source: credit.source,
     input_url: inputImageUrl,
     output_url: outputUrl,
-    choices: { backgroundId: built.backgroundId },
+    choices: {
+      backgroundId: built.backgroundId,
+      studioStyle: built.studioStyle,
+    },
     photoroom_mode: built.photoroomMode,
   });
 }
@@ -90,7 +117,11 @@ export async function saveAdGeneration(
     source: credit.source,
     input_url: inputImageUrl,
     output_url: outputUrl,
-    choices: { backgroundId: built.backgroundId, adCopy: built.adCopy },
+    choices: {
+      backgroundId: built.backgroundId,
+      adCopy: built.adCopy,
+      adBrief: built.adBrief,
+    },
     photoroom_mode: built.photoroomMode,
   });
 }

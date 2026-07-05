@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@fontsource/dejavu-sans": "^5.2.5",
     "@supabase/supabase-js": "^2.110.0",
     "canvas": "^3.2.3",
     "fabric": "^7.4.0",
