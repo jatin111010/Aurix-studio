@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Velora Studio — Business Plan & Architecture</title>
+  <style>
+    @page { margin: 22mm 18mm; size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.55;
+      color: #1a1a1a;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+    .cover {
+      text-align: center;
+      padding: 48px 0 40px;
+      border-bottom: 3px solid #b45309;
+      margin-bottom: 32px;
+    }
+    .cover h1 {
+      font-size: 28pt;
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .cover .tagline {
+      font-size: 13pt;
+      color: #57534e;
+      margin-bottom: 24px;
+    }
+    .cover .meta {
+      font-size: 9pt;
+      color: #78716c;
+    }
+    h2 {
+      font-size: 14pt;
+      color: #92400e;
+      margin: 28px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e7e5e4;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 11pt;
+      color: #44403c;
+      margin: 18px 0 8px;
+      page-break-after: avoid;
+    }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li { margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #d6d3d1;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    th {
+      background: #fafaf9;
+      font-weight: 600;
+      color: #44403c;
+    }
+    tr:nth-child(even) td { background: #fafaf9; }
+    .highlight {
+      background: #fffbeb;
+      border-left: 4px solid #d97706;
+      padding: 12px 14px;
+      margin: 14px 0;
+      font-size: 10pt;
+    }
+    .muted { color: #78716c; font-size: 9pt; }
+    .page-break { page-break-before: always; }
+    .footer-note {
+      margin-top: 40px;
+      padding-top: 12px;
+      border-top: 1px solid #e7e5e4;
+      font-size: 8.5pt;
+      color: #a8a29e;
+      text-align: center;
+    }
+    .two-col { display: flex; gap: 20px; flex-wrap: wrap; }
+    .two-col > div { flex: 1; min-width: 200px; }
+    .badge {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 8pt;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="cover">
+    <p class="badge">Confidential — Business Plan</p>
+    <h1>Velora Studio</h1>
+    <p class="tagline">AI Studio &amp; Sales Engine for Indian Merchants on WhatsApp</p>
+    <p class="meta">Revised strategy · Inbound acquisition · Subscription model<br />Version 2.0 · July 2026</p>
+  </div>
+
+  <h2>1. Executive Summary</h2>
+  <p>
+    <strong>Velora Studio</strong> is a B2B SaaS product built for Indian e-commerce sellers, home businesses,
+    and local retail brands. The entire customer experience lives inside <strong>WhatsApp</strong> — no website
+    onboarding, no design tools, no technical skills required.
+  </p>
+  <p>
+    Merchants upload a raw product photo, choose simple options via buttons (background, vibe, studio vs ad),
+    and receive polished marketing-ready images in seconds. After <strong>2 free studio shots</strong>, they
+    subscribe via Razorpay to unlock monthly credit balances.
+  </p>
+  <div class="highlight">
+    <strong>Unfair advantage:</strong> Unlike passive SaaS that waits for signups, Velora is built as an
+    <strong>inbound conversion engine</strong> — Meta/Instagram ads and referrals drive opted-in merchants
+    to WhatsApp, where value is proven in under 60 seconds and subscriptions close in the same chat thread.
+  </div>
+  <p class="muted">
+    <strong>Strategic change from v1:</strong> Google Maps lead scraping and automated cold WhatsApp outreach
+    are removed. Acquisition is 100% opt-in (ads, content, referrals, partnerships) for compliance, trust, and
+    sustainable unit economics.
+  </p>
+
+  <h2>2. Revised Workflow (5 Stages)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Name</th>
+        <th>What happens</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1</strong></td>
+        <td>Acquire (opt-in)</td>
+        <td>Meta/Instagram ads, Reels, referrals, and partner channels drive merchants to Click-to-Chat on WhatsApp. User explicitly opts in.</td>
+      </tr>
+      <tr>
+        <td><strong>2</strong></td>
+        <td>Activate (60-second wow)</td>
+        <td>Welcome message → upload product photo → 3 background buttons → first studio result delivered in chat. No long interview on message one.</td>
+      </tr>
+      <tr>
+        <td><strong>3</strong></td>
+        <td>Guide (conversational)</td>
+        <td>OpenAI manages follow-up choices: vibe, studio vs social ad, optional headlines. Button-based — no text prompts required.</td>
+      </tr>
+      <tr>
+        <td><strong>4</strong></td>
+        <td>Generate (Photoroom)</td>
+        <td>Raw image + choices routed to Photoroom Plus API: background removal, AI scene, relighting. Ad mode adds copy + template layout (premium credit).</td>
+      </tr>
+      <tr>
+        <td><strong>5</strong></td>
+        <td>Convert &amp; retain</td>
+        <td>After 2 free images, paywall + Razorpay payment link. Brand memory, festival packs, and referral credits drive retention and expansion.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Product Strategy</h2>
+
+  <h3>3.1 Core experience principles</h3>
+  <ul>
+    <li><strong>WhatsApp-first:</strong> Upload, choose, receive — all in chat.</li>
+    <li><strong>Buttons over prompts:</strong> Marble / Wood / Studio / Sunlight — no AI literacy needed.</li>
+    <li><strong>Fast proof:</strong> First result before any lengthy onboarding.</li>
+    <li><strong>Honest marketing:</strong> Promise “studio-quality product shots,” not unverified “4K” unless output is guaranteed.</li>
+  </ul>
+
+  <h3>3.2 Studio vs Social Media Ad fork</h3>
+  <p>After the first image, the bot asks:</p>
+  <p><em>“Do you need a Normal Studio Photoshoot or a Social Media Ad Post?”</em></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Output</th>
+        <th>Credit cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Studio</td>
+        <td>Clean product on chosen background with professional lighting</td>
+        <td><strong>1 studio credit</strong></td>
+      </tr>
+      <tr>
+        <td>Ad post</td>
+        <td>Product + AI headline/sticker (e.g. “Festival Sale — 15% OFF”) on styled template</td>
+        <td><strong>2 ad credits</strong> (higher API + OpenAI cost)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 Free tier</h3>
+  <ul>
+    <li><strong>2 free studio images</strong> per phone number (lifetime or rolling — configurable).</li>
+    <li>Ad mode available only after subscription or optional top-up pack.</li>
+    <li>Quota balance visible in WhatsApp: <em>“Balance: 38 studio · 5 ad”</em>.</li>
+  </ul>
+
+  <h3>3.4 Brand memory (retention)</h3>
+  <p>After 2nd generation, store lightweight preferences in database:</p>
+  <ul>
+    <li>Product category (jewellery, food, clothing, etc.)</li>
+    <li>Preferred background and language (Hindi / English)</li>
+    <li>Last used vibe and ad headline style</li>
+  </ul>
+  <p>Enables faster repeat flows and festival campaign nudges (Diwali, Rakhi, wedding season).</p>
+
+  <h3>3.5 Optional add-ons (post-MVP)</h3>
+  <ul>
+    <li><strong>₹199 one-time pack:</strong> 5 studio shots for hesitant non-subscribers.</li>
+    <li><strong>Annual billing:</strong> ~2 months free (e.g. Growth at ₹17,999/year) for cash flow.</li>
+    <li><strong>Agency tier:</strong> Multi-brand / white-label for listing agencies (+₹1,500/mo add-on).</li>
+    <li><strong>Web dashboard:</strong> OTP login, quota history, asset download — after 100+ paying users.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>4. Go-to-Market (No Cold Scraping)</h2>
+
+  <h3>4.1 Primary acquisition channels</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Channel</th>
+        <th>Tactic</th>
+        <th>Why it works</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Meta / Instagram ads</td>
+        <td>“Try 2 free studio shots on WhatsApp” + Click-to-Chat</td>
+        <td>High intent, Meta-compliant opt-in, measurable CPA</td>
+      </tr>
+      <tr>
+        <td>Reels / Shorts</td>
+        <td>Before/after product transformations + bio link</td>
+        <td>Low-cost demos; visual product sells itself</td>
+      </tr>
+      <tr>
+        <td>Referrals</td>
+        <td>Invite a shop → both get +3 studio credits</td>
+        <td>Low CAC; strong in local merchant networks</td>
+      </tr>
+      <tr>
+        <td>Partnerships</td>
+        <td>Photographers, packaging vendors, Shopify/Woo agencies</td>
+        <td>Trusted distribution to ideal customer profile</td>
+      </tr>
+      <tr>
+        <td>Marketplace sellers</td>
+        <td>Content targeting Meesho/Amazon listing quality pain</td>
+        <td>Clear ROI story: better photos → more sales</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 What we deliberately avoid</h3>
+  <ul>
+    <li>Google Maps scraping and unsourced phone lists</li>
+    <li>Automated cold WhatsApp blasts to non-opted-in numbers</li>
+    <li>Unlimited subscription tiers (margin risk)</li>
+    <li>Heavy OpenAI “interview” before first image (kills activation)</li>
+  </ul>
+
+  <h3>4.3 Compliance</h3>
+  <ul>
+    <li>Opt-in only; store consent timestamp per user</li>
+    <li>Easy STOP / unsubscribe in every flow</li>
+    <li>Meta-approved templates for any proactive messaging outside 24h window</li>
+    <li>Respect TRAI / DND norms — no purchased lead lists</li>
+  </ul>
+
+  <h2>5. Financial Architecture &amp; Subscription Tiers</h2>
+
+  <p>
+    Monthly subscription model with separate <strong>studio</strong> and <strong>ad</strong> credit pools.
+    Margins benefit from industry-standard <strong>usage breakage</strong> (not all subscribers exhaust caps).
+  </p>
+
+  <h3>5.1 Recommended plans</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Plan</th>
+        <th>Target market</th>
+        <th>Price (INR/mo)</th>
+        <th>Studio credits</th>
+        <th>Ad credits</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Starter</strong></td>
+        <td>Home bakers, boutique shops</td>
+        <td>₹999</td>
+        <td>40</td>
+        <td>5</td>
+      </tr>
+      <tr>
+        <td><strong>Growth</strong></td>
+        <td>D2C brands, Instagram sellers</td>
+        <td>₹1,799</td>
+        <td>80</td>
+        <td>12</td>
+      </tr>
+      <tr>
+        <td><strong>Pro</strong></td>
+        <td>E-commerce shops, small agencies</td>
+        <td>₹2,999</td>
+        <td>150</td>
+        <td>25</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Unit economics (conservative)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Cost component</th>
+        <th>Estimate per asset</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Studio image (Photoroom + light OpenAI)</td>
+        <td>₹6 – ₹9</td>
+      </tr>
+      <tr>
+        <td>Ad post (Photoroom + copy + layout)</td>
+        <td>₹10 – ₹14</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>Starter plan — full usage worst case:</strong><br />
+    40 × ₹8 + 5 × ₹12 ≈ <strong>₹380 API cost</strong> on ₹999 revenue → <strong>~62% gross margin</strong>.<br />
+    Real-world margin is higher due to unused credits and partial ad usage.</p>
+
+  <h3>5.3 Margin protection rules</h3>
+  <ul>
+    <li>Ad mode costs 2× internally vs studio (reflected in separate ad credit pool).</li>
+    <li>No unlimited plans at launch.</li>
+    <li>Three tiers only — simple to sell and support.</li>
+    <li>Track funnel: ad click → first photo → second photo → payment (for CPA optimization).</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>6. Technical Stack Blueprint</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>Technology</th>
+        <th>Role</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>App host</td>
+        <td>Next.js on Vercel</td>
+        <td>API routes, webhooks, sandbox tester</td>
+      </tr>
+      <tr>
+        <td>Database</td>
+        <td>Supabase (PostgreSQL)</td>
+        <td>Users, credits, conversations, generations, payments</td>
+      </tr>
+      <tr>
+        <td>Storage</td>
+        <td>Supabase Storage</td>
+        <td>Uploads and output PNGs</td>
+      </tr>
+      <tr>
+        <td>WhatsApp</td>
+        <td>Meta Cloud API (BSP later if needed)</td>
+        <td>Webhooks, media, interactive buttons</td>
+      </tr>
+      <tr>
+        <td>Conversation</td>
+        <td>OpenAI (gpt-4o-mini)</td>
+        <td>Session flow, ad copy generation</td>
+      </tr>
+      <tr>
+        <td>Graphics</td>
+        <td>Photoroom Plus API</td>
+        <td>Background removal, AI scenes, relighting</td>
+      </tr>
+      <tr>
+        <td>Payments</td>
+        <td>Razorpay payment links + webhooks</td>
+        <td>Subscription activation and credit grants</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>6.1 Build phases (current status)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Scope</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Phase 1</strong></td>
+        <td>Photoroom sandbox, Supabase schema, health check, web tester</td>
+        <td>✅ Complete</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2</strong></td>
+        <td>Full WhatsApp flow: photo → buttons → generate → deliver → credits</td>
+        <td>🔲 Next</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3</strong></td>
+        <td>Studio vs ad fork, OpenAI copy, template compositing</td>
+        <td>🔲 Planned</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4</strong></td>
+        <td>Razorpay paywall, plan buttons, webhook credit grants</td>
+        <td>🔲 Planned</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 5</strong></td>
+        <td>Referrals, analytics funnel, dashboard, agency tier</td>
+        <td>🔲 Future</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>7. Key Metrics to Track</h2>
+  <ul>
+    <li><strong>Acquisition:</strong> Cost per WhatsApp conversation (from Meta ads)</li>
+    <li><strong>Activation:</strong> % who upload first photo within 5 minutes</li>
+    <li><strong>Conversion:</strong> % who use both free images</li>
+    <li><strong>Revenue:</strong> Free → paid conversion rate; ARPU by plan</li>
+    <li><strong>Retention:</strong> Month-2 active rate; credits used vs granted (breakage)</li>
+    <li><strong>Quality:</strong> Regeneration rate; support tickets per 100 users</li>
+  </ul>
+
+  <h2>8. Summary — What Changed from Original Plan</h2>
+  <div class="two-col">
+    <div>
+      <h3>Removed</h3>
+      <ul>
+        <li>Google Maps lead harvesting</li>
+        <li>Cold WhatsApp outreach to scraped numbers</li>
+        <li>Long interview before first result</li>
+        <li>Over-promising “4K” in marketing</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Added</h3>
+      <ul>
+        <li>Inbound ads + referrals + partnerships</li>
+        <li>60-second activation path</li>
+        <li>Separate studio / ad credit pools</li>
+        <li>Brand memory + festival campaigns</li>
+        <li>Funnel analytics from day one</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="highlight">
+    <strong>Next build step:</strong> Phase 2 — full WhatsApp conversation flow. WhatsApp-specific requirements
+    to be finalized separately before implementation.
+  </div>
+
+  <p class="footer-note">
+    Velora Studio · Business Plan v2.0 · Confidential · July 2026
+  </p>
+
+</body>
+</html>
