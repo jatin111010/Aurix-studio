@@ -1,3 +1,4 @@
+import { Phase2Setup } from "@/components/Phase2Setup";
 import { SandboxTester } from "@/components/SandboxTester";
 
 export default function Home() {
@@ -12,31 +13,14 @@ export default function Home() {
             AI studio photoshoots on WhatsApp
           </h1>
           <p className="max-w-xl text-zinc-600">
-            MVP scaffold: Supabase + Vercel + Photoroom. Start in{" "}
-            <strong>sandbox</strong> (watermarked, free quota). Switch to
-            production by setting <code className="rounded bg-zinc-200 px-1">PHOTOROOM_MODE=production</code>.
+            Phase 2 is live: connect Meta WhatsApp to your Vercel app, then merchants
+            can send a product photo and get a studio shot in chat.
           </p>
         </header>
 
-        <SandboxTester />
+        <Phase2Setup />
 
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
-          <h2 className="mb-2 font-semibold text-zinc-900">WhatsApp setup</h2>
-          <ol className="list-decimal space-y-1 pl-5">
-            <li>Deploy to Vercel (webhook needs a public HTTPS URL)</li>
-            <li>
-              Meta Developer Console → WhatsApp → Configuration → Webhook URL:{" "}
-              <code className="rounded bg-zinc-100 px-1">/api/webhooks/whatsapp</code>
-            </li>
-            <li>
-              Verify token: <code className="rounded bg-zinc-100 px-1">velora_verify_token</code> (or your{" "}
-              <code className="rounded bg-zinc-100 px-1">WHATSAPP_VERIFY_TOKEN</code>)
-            </li>
-            <li>Add <code className="rounded bg-zinc-100 px-1">WHATSAPP_TOKEN</code> and{" "}
-              <code className="rounded bg-zinc-100 px-1">WHATSAPP_PHONE_NUMBER_ID</code> to Vercel env</li>
-            <li>Message the number: send a product photo → pick background → receive studio shot</li>
-          </ol>
-        </section>
+        <SandboxTester />
       </main>
     </div>
   );
