@@ -1,6 +1,6 @@
 import { BACKGROUNDS } from "@/lib/config";
-import { compositeAdHeadline } from "@/lib/ad-composite";
-import { generateAdCopy } from "@/lib/openai";
+import { compositeAdPost } from "@/lib/ad-composite";
+import { generateAdCopy, type AdCopyContent } from "@/lib/openai";
 import { editImage, getPhotoroomMode } from "@/lib/photoroom";
 import { uploadOutputPng } from "@/lib/storage";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -17,7 +17,7 @@ export type BuiltStudioImage = {
 };
 
 export type BuiltAdImage = BuiltStudioImage & {
-  headline: string;
+  adCopy: AdCopyContent;
 };
 
 export async function buildStudioImage(
@@ -47,10 +47,10 @@ export async function buildAdImage(
 ): Promise<BuiltAdImage> {
   const built = await buildStudioImage(inputImageUrl, backgroundId);
   const background = BACKGROUNDS.find((b) => b.id === backgroundId);
-  const headline = await generateAdCopy(background?.label);
-  const png = await compositeAdHeadline(built.png, headline);
+  const adCopy = await generateAdCopy(background?.label);
+  const png = await compositeAdPost(built.png, adCopy, backgroundId);
 
-  return { ...built, png, headline };
+  return { ...built, png, adCopy };
 }
 
 export async function saveStudioGeneration(
@@ -90,7 +90,7 @@ export async function saveAdGeneration(
     source: credit.source,
     input_url: inputImageUrl,
     output_url: outputUrl,
-    choices: { backgroundId: built.backgroundId, headline: built.headline },
+    choices: { backgroundId: built.backgroundId, adCopy: built.adCopy },
     photoroom_mode: built.photoroomMode,
   });
 }

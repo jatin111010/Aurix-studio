@@ -113,7 +113,7 @@ async function askMode(to: string): Promise<void> {
 async function askBackground(to: string, mode: GenerationMode): Promise<void> {
   const intro =
     mode === "ad"
-      ? "Pick a background for your *ad post*. We'll add a catchy headline on top."
+      ? "Pick a background for your *ad post*. We'll design a full social post with headline, offer badge & CTA."
       : "Pick a background for your *studio shot* (clean product photo, no text overlay):";
 
   await sendList(
@@ -196,7 +196,7 @@ async function handleBackgroundChoice(
 
   const working =
     mode === "ad"
-      ? "Creating your ad post with AI headline… ~20–40 seconds."
+      ? "Designing your social ad post… ~20–40 seconds."
       : "Creating your studio shot… ~15–30 seconds.";
   await sendText(to, working);
 
@@ -212,7 +212,8 @@ async function handleBackgroundChoice(
         to,
         built.png,
         [
-          `Velora Ad — "${built.headline}"`,
+          `Velora Ad — ${built.adCopy.headline}`,
+          built.adCopy.badge,
           `${background?.label ?? "Studio"} background`,
           built.photoroomMode === "sandbox" ? "(sandbox preview)" : "",
         ]

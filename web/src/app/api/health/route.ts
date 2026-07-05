@@ -5,6 +5,7 @@ import {
   isRazorpayConfigured,
   isRazorpayWebhookConfigured,
 } from "@/lib/razorpay";
+import { verifyWhatsAppCredentials } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 
@@ -63,6 +64,10 @@ export async function GET() {
   const phase4Ready =
     phase2Ready && razorpayConfigured && razorpayWebhookConfigured;
 
+  const whatsappCheck = whatsappConfigured
+    ? await verifyWhatsAppCredentials()
+    : { ok: false, error: "missing_env" as const };
+
   return NextResponse.json({
     ok: true,
     service: "velora-studio",
@@ -72,6 +77,9 @@ export async function GET() {
     photoroomConfigured,
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     whatsappConfigured,
+    whatsappTokenValid: whatsappCheck.ok,
+    whatsappAuthError: whatsappCheck.error ?? null,
+    whatsappAuthHint: whatsappCheck.hint ?? null,
     razorpayConfigured,
     razorpayWebhookConfigured,
     phase2Ready,

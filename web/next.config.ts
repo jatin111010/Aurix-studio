@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  serverExternalPackages: ["canvas", "fabric"],
 };
 
 export default nextConfig;

@@ -6,13 +6,65 @@
 const GRAPH = "https://graph.facebook.com";
 
 function getConfig() {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = process.env.WHATSAPP_TOKEN?.trim();
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   const version = process.env.WHATSAPP_API_VERSION ?? "v21.0";
   if (!token || !phoneNumberId) {
     throw new Error("WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID is not set");
   }
   return { token, phoneNumberId, version };
+}
+
+/** Live check: token + phone number ID work together on Meta's API. */
+export async function verifyWhatsAppCredentials(): Promise<{
+  ok: boolean;
+  error?: string;
+  hint?: string;
+}> {
+  const token = process.env.WHATSAPP_TOKEN?.trim();
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  const version = process.env.WHATSAPP_API_VERSION ?? "v21.0";
+
+  if (!token || !phoneNumberId) {
+    return { ok: false, error: "missing_env", hint: "Set WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID on Vercel." };
+  }
+
+  if (token.length < 80) {
+    return {
+      ok: false,
+      error: "token_format",
+      hint: "WHATSAPP_TOKEN looks too short — use the long Access Token from WhatsApp → API Setup, not App Secret or App ID.",
+    };
+  }
+
+  try {
+    const res = await fetch(
+      `${GRAPH}/${version}/${phoneNumberId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const body = await res.text();
+
+    if (res.ok) {
+      return { ok: true };
+    }
+
+    if (body.includes("OAuthException") || body.includes("code\":190")) {
+      return {
+        ok: false,
+        error: "auth_failed",
+        hint:
+          "Token invalid or does not match this Phone number ID. Re-copy BOTH from the same Meta app → WhatsApp → API Setup, update Vercel, redeploy. Regenerating the token invalidates the old one immediately.",
+      };
+    }
+
+    return { ok: false, error: `http_${res.status}`, hint: body.slice(0, 200) };
+  } catch (e) {
+    return {
+      ok: false,
+      error: "network",
+      hint: e instanceof Error ? e.message : "Could not reach Meta API",
+    };
+  }
 }
 
 export async function sendText(to: string, body: string): Promise<void> {
