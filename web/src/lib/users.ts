@@ -50,7 +50,11 @@ export async function canGenerate(
 
   if (userError) throw userError;
 
-  if ((user.free_used as number) < FREE_IMAGES) {
+  // Free tier applies to studio shots only — ad posts need paid ad credits.
+  if (
+    type === "studio" &&
+    (user.free_used as number) < FREE_IMAGES
+  ) {
     return { ok: true, source: "free" };
   }
 

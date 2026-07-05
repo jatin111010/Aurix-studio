@@ -65,13 +65,28 @@ export async function sendPaywallMessage(
 
   await sendText(
     to,
-    `You've used your free images. Subscribe to keep creating studio shots:\n\n${planLines}\n\nTap a plan below to pay via Razorpay.`,
+    `You've used your free studio images. Subscribe to keep creating:\n\n${planLines}\n\nTap a plan below to pay via Razorpay.`,
   );
 
   await sendButtons(to, "Choose your plan:", [
     { id: "plan_starter", title: `Starter ₹${PLANS.starter.priceInr}` },
     { id: "plan_growth", title: `Growth ₹${PLANS.growth.priceInr}` },
     { id: "plan_pro", title: `Pro ₹${PLANS.pro.priceInr}` },
+  ]);
+}
+
+export async function sendAdPaywallMessage(
+  to: string,
+  userId: string,
+): Promise<void> {
+  await sendText(
+    to,
+    "Social media *ad posts* need a subscription (ad credits). Your free trial is for *studio shots* only.\n\nSubscribe to unlock ad posts with AI headlines, or pick Studio Shot below.",
+  );
+
+  await sendButtons(to, "What would you like?", [
+    { id: "mode_studio", title: "Studio shot" },
+    { id: "plan_starter", title: "View plans" },
   ]);
 }
 

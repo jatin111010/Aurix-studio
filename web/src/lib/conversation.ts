@@ -1,6 +1,10 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 
-export type ConversationStep = "start" | "awaiting_background" | "generating";
+export type ConversationStep =
+  | "start"
+  | "awaiting_mode"
+  | "awaiting_background"
+  | "generating";
 
 export type ConversationRow = {
   id: string;

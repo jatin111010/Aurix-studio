@@ -13,8 +13,8 @@ export default function Home() {
             AI studio photoshoots on WhatsApp
           </h1>
           <p className="max-w-xl text-zinc-600">
-            Phase 2 is live: connect Meta WhatsApp to your Vercel app, then merchants
-            can send a product photo and get a studio shot in chat.
+            Phase 2 live on WhatsApp. Phase 3 adds studio vs social ad posts with AI headlines.
+            Deploy latest code to Vercel to activate.
           </p>
         </header>
 
