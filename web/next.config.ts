@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     root: path.join(__dirname),
   },
   serverExternalPackages: ["canvas", "fabric"],
+  outputFileTracingIncludes: {
+    "/api/webhooks/whatsapp": ["./assets/fonts/**"],
+    "/api/generate": ["./assets/fonts/**"],
+  },
 };
 
 export default nextConfig;

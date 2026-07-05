@@ -14,36 +14,9 @@ import {
   type AdTemplateId,
 } from "@/lib/ad-templates";
 import type { AdCopyContent } from "@/lib/openai";
+import { renderAdTextLayer } from "@/lib/ad-text-canvas";
 
 export type { AdCopyContent };
-
-const FONT = "DejaVu Sans, Liberation Sans, Arial, sans-serif";
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .slice(0, 80);
-}
-
-function wrapHeadline(text: string, maxChars = 28): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > maxChars && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.slice(0, 2);
-}
 
 function canvasToPngBuffer(canvas: StaticCanvasType): Promise<Buffer> {
   canvas.renderAll();
@@ -168,49 +141,7 @@ function addProductFrame(canvas: StaticCanvasType, template: AdTemplate): void {
   );
 }
 
-/** SVG text overlay — works on Vercel/Linux (FabricText does not). */
-function buildTextOverlaySvg(
-  copy: AdCopyContent,
-  template: AdTemplate,
-  badge: { cx: number; cy: number } | null,
-  cta: { cx: number; cy: number },
-): string {
-  const headlineLines = wrapHeadline(copy.headline);
-  const headlineY = AD_SIZE * 0.1;
-  const lineHeight = 62;
-
-  const headlineSvg = headlineLines
-    .map(
-      (line, i) =>
-        `<text x="${AD_SIZE / 2}" y="${headlineY + i * lineHeight}" font-family="${FONT}" font-size="52" font-weight="700" fill="${template.headlineColor}" text-anchor="middle">${escapeXml(line)}</text>`,
-    )
-    .join("\n");
-
-  return `<svg width="${AD_SIZE}" height="${AD_SIZE}" xmlns="http://www.w3.org/2000/svg">
-  ${headlineSvg}
-  <text x="${AD_SIZE / 2}" y="${AD_SIZE * 0.22}" font-family="${FONT}" font-size="28" fill="${template.subColor}" text-anchor="middle">${escapeXml(copy.subheadline)}</text>
-  ${badge && copy.badge ? `<text x="${badge.cx}" y="${badge.cy + 10}" font-family="${FONT}" font-size="26" font-weight="700" fill="${template.badgeText}" text-anchor="middle">${escapeXml(copy.badge)}</text>` : ""}
-  <text x="${cta.cx}" y="${cta.cy + 10}" font-family="${FONT}" font-size="28" font-weight="700" fill="${template.ctaText}" text-anchor="middle">${escapeXml(copy.cta)}</text>
-</svg>`;
-}
-
-async function applyTextOverlay(
-  basePng: Buffer,
-  copy: AdCopyContent,
-  template: AdTemplate,
-  badge: { cx: number; cy: number } | null,
-  cta: { cx: number; cy: number },
-): Promise<Buffer> {
-  const svg = buildTextOverlaySvg(copy, template, badge, cta);
-  return sharp(basePng)
-    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
-    .png()
-    .toBuffer();
-}
-
-/**
- * Fabric.js layout (shapes + product) + Sharp SVG text overlay.
- */
+/** Fabric.js layout (shapes + product) + canvas text overlay. */
 export async function compositeAdPost(
   productPng: Buffer,
   copy: AdCopyContent,
@@ -233,5 +164,10 @@ export async function compositeAdPost(
   const cta = addCtaShape(canvas, template);
 
   const basePng = await canvasToPngBuffer(canvas);
-  return applyTextOverlay(basePng, copy, template, badge, cta);
+  const textLayer = renderAdTextLayer(copy, template, badge, cta);
+
+  return sharp(basePng)
+    .composite([{ input: textLayer, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
 }

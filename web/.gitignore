@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# downloaded ad fonts (re-created on npm install / build)
+/assets/fonts/*.ttf
+
 # debug
 npm-debug.log*
 yarn-debug.log*
