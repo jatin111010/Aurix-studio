@@ -13,8 +13,8 @@ export default function Home() {
             AI studio photoshoots on WhatsApp
           </h1>
           <p className="max-w-xl text-zinc-600">
-            Phase 2 live on WhatsApp. Phase 3 adds studio vs social ad posts with AI headlines.
-            Deploy latest code to Vercel to activate.
+            WhatsApp studio + ad posts are live. Phase 4 adds Razorpay subscriptions —
+            deploy latest code and connect Razorpay to accept payments.
           </p>
         </header>
 

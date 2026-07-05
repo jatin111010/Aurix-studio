@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPhotoroomMode } from "@/lib/photoroom";
+import {
+  getRazorpayWebhookUrl,
+  isRazorpayConfigured,
+  isRazorpayWebhookConfigured,
+} from "@/lib/razorpay";
 
 export const runtime = "nodejs";
 
@@ -22,10 +27,13 @@ export async function GET() {
   const whatsappConfigured = Boolean(
     process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID,
   );
+  const razorpayConfigured = isRazorpayConfigured();
+  const razorpayWebhookConfigured = isRazorpayWebhookConfigured();
   const verifyToken =
     process.env.WHATSAPP_VERIFY_TOKEN ?? "velora_verify_token";
   const appUrl = getAppUrl();
   const webhookUrl = appUrl ? `${appUrl}/api/webhooks/whatsapp` : null;
+  const razorpayWebhookUrl = getRazorpayWebhookUrl();
 
   const missing: string[] = [];
   if (!photoroomConfigured) missing.push("PHOTOROOM_API_KEY");
@@ -39,6 +47,12 @@ export async function GET() {
     missing.push("WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID");
   }
   if (!appUrl) missing.push("NEXT_PUBLIC_APP_URL");
+  if (!razorpayConfigured) {
+    missing.push("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET");
+  }
+  if (!razorpayWebhookConfigured) {
+    missing.push("RAZORPAY_WEBHOOK_SECRET");
+  }
 
   const phase2Ready =
     photoroomConfigured &&
@@ -46,21 +60,25 @@ export async function GET() {
     whatsappConfigured &&
     Boolean(webhookUrl);
 
+  const phase4Ready =
+    phase2Ready && razorpayConfigured && razorpayWebhookConfigured;
+
   return NextResponse.json({
     ok: true,
     service: "velora-studio",
-    phase: 2,
+    phase: phase4Ready ? 4 : phase2Ready ? 3 : 1,
     photoroomMode: getPhotoroomMode(),
     supabaseConfigured,
     photoroomConfigured,
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     whatsappConfigured,
-    razorpayConfigured: Boolean(
-      process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET,
-    ),
+    razorpayConfigured,
+    razorpayWebhookConfigured,
     phase2Ready,
+    phase4Ready,
     appUrl,
     webhookUrl,
+    razorpayWebhookUrl,
     verifyToken,
     missing: [...new Set(missing)],
   });

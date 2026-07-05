@@ -1,4 +1,4 @@
-import { BACKGROUNDS, FREE_IMAGES, type PlanId } from "@/lib/config";
+import { BACKGROUNDS, type PlanId } from "@/lib/config";
 import {
   getOrCreateConversation,
   resetConversation,
@@ -7,8 +7,12 @@ import {
 import {
   AdPaywallError,
   PaywallError,
-  runAdGeneration,
-  runStudioGeneration,
+  buildAdImage,
+  buildStudioImage,
+  checkAdCredit,
+  checkStudioCredit,
+  saveAdGeneration,
+  saveStudioGeneration,
 } from "@/lib/generation";
 import {
   formatQuotaMessage,
@@ -16,14 +20,15 @@ import {
   handlePlanSelection,
   sendAdPaywallMessage,
   sendPaywallMessage,
+  sendPlansMenu,
 } from "@/lib/paywall";
-import { uploadInputImage } from "@/lib/storage";
+import { uploadInputImage, uploadOutputPng } from "@/lib/storage";
 import { canGenerate, getOrCreateUserByPhone } from "@/lib/users";
 import {
   downloadMedia,
   mimeToExt,
   sendButtons,
-  sendImage,
+  sendImagePng,
   sendList,
   sendText,
 } from "@/lib/whatsapp";
@@ -73,29 +78,43 @@ function getConversationMode(choices: Record<string, unknown>): GenerationMode {
   return choices.mode === "ad" ? "ad" : "studio";
 }
 
-async function sendWelcome(to: string, freeRemaining: number): Promise<void> {
+async function sendWelcome(to: string, userId: string): Promise<void> {
+  const quota = await getUserQuota(userId);
+
+  if (quota.studioBalance > 0 || quota.adBalance > 0) {
+    await sendText(
+      to,
+      `Welcome back to Velora Studio!\n\n${formatQuotaMessage(quota)}\n\nSend a product photo to create your next image.`,
+    );
+    return;
+  }
+
+  if (quota.freeRemaining > 0) {
+    await sendText(
+      to,
+      `Welcome to Velora Studio!\n\nSend a product photo and we'll create a professional studio shot.\n\n${formatQuotaMessage(quota)}\n\nAd posts unlock with a subscription.`,
+    );
+    return;
+  }
+
   await sendText(
     to,
-    `Welcome to Velora Studio!\n\nSend a product photo and we'll create a professional image for you.\n\nYou have ${freeRemaining} free studio shot${freeRemaining === 1 ? "" : "s"} to try. Ad posts unlock with a subscription.`,
+    `Welcome to Velora Studio!\n\n${formatQuotaMessage(quota)}\n\nType *plans* to subscribe.`,
   );
 }
 
 async function askMode(to: string): Promise<void> {
-  await sendButtons(
-    to,
-    "What do you need?",
-    [
-      { id: "mode_studio", title: "Studio shot" },
-      { id: "mode_ad", title: "Social ad post" },
-    ],
-  );
+  await sendButtons(to, "What do you need?", [
+    { id: "mode_studio", title: "Studio shot" },
+    { id: "mode_ad", title: "Social ad post" },
+  ]);
 }
 
 async function askBackground(to: string, mode: GenerationMode): Promise<void> {
   const intro =
     mode === "ad"
-      ? "Pick a background for your ad post. We'll add a catchy headline automatically."
-      : "Pick a background for your studio shot:";
+      ? "Pick a background for your *ad post*. We'll add a catchy headline on top."
+      : "Pick a background for your *studio shot* (clean product photo, no text overlay):";
 
   await sendList(
     to,
@@ -183,35 +202,48 @@ async function handleBackgroundChoice(
 
   try {
     const background = BACKGROUNDS.find((b) => b.id === backgroundId);
-    const quota = await getUserQuota(userId);
 
     if (mode === "ad") {
-      const result = await runAdGeneration(userId, inputImageUrl, backgroundId);
-      const caption = [
-        `Velora Ad — "${result.headline}"`,
-        `${background?.label ?? "Studio"} background`,
-        result.photoroomMode === "sandbox" ? "(sandbox preview)" : "",
-        formatQuotaMessage(quota),
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const credit = await checkAdCredit(userId);
+      const built = await buildAdImage(inputImageUrl, backgroundId);
+      const outputUrl = await uploadOutputPng(userId, built.png);
 
-      await sendImage(to, result.outputUrl, caption);
+      await sendImagePng(
+        to,
+        built.png,
+        [
+          `Velora Ad — "${built.headline}"`,
+          `${background?.label ?? "Studio"} background`,
+          built.photoroomMode === "sandbox" ? "(sandbox preview)" : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+
+      await saveAdGeneration(userId, inputImageUrl, outputUrl, built, credit);
     } else {
-      const result = await runStudioGeneration(
+      const credit = await checkStudioCredit(userId);
+      const built = await buildStudioImage(inputImageUrl, backgroundId);
+      const outputUrl = await uploadOutputPng(userId, built.png);
+
+      await sendImagePng(
+        to,
+        built.png,
+        [
+          `Velora Studio — ${background?.label ?? "Studio"} background`,
+          built.photoroomMode === "sandbox" ? "(sandbox preview)" : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+
+      await saveStudioGeneration(
         userId,
         inputImageUrl,
-        backgroundId,
+        outputUrl,
+        built,
+        credit,
       );
-      const caption = [
-        `Velora Studio — ${background?.label ?? "Studio"} background`,
-        result.photoroomMode === "sandbox" ? "(sandbox preview)" : "",
-        formatQuotaMessage(quota),
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      await sendImage(to, result.outputUrl, caption);
     }
 
     await resetConversation(conversationId);
@@ -224,7 +256,7 @@ async function handleBackgroundChoice(
     if (canStudio || canAd) {
       await sendText(
         to,
-        `Send another product photo anytime.\n\n${formatQuotaMessage(updatedQuota)}`,
+        `Done! Send another product photo anytime.\n\n${formatQuotaMessage(updatedQuota)}`,
       );
     } else {
       await sendPaywallMessage(to, userId);
@@ -248,7 +280,7 @@ async function handleBackgroundChoice(
     console.error("Generation failed", error);
     await sendText(
       to,
-      "Sorry, we couldn't generate that image. Please try again or send a clearer product photo.",
+      "Sorry, we couldn't deliver your image. No credit was used. Please try again — send your product photo once more.",
     );
   }
 }
@@ -267,9 +299,29 @@ async function handleText(
     return;
   }
 
-  if (["hi", "hello", "hey", "start", "help"].includes(lower) || step === "start") {
-    const quota = await getUserQuota(userId);
-    await sendWelcome(to, quota.freeRemaining || FREE_IMAGES);
+  if (["plans", "subscribe", "pricing", "plan", "pay"].includes(lower)) {
+    await sendPlansMenu(to);
+    return;
+  }
+
+  if (
+    ["hi", "hello", "hey", "start", "help"].includes(lower) ||
+    lower === "now"
+  ) {
+    await sendWelcome(to, userId);
+    return;
+  }
+
+  if (
+    lower.includes("where") ||
+    lower.includes("post") ||
+    lower === "???" ||
+    lower.includes("image")
+  ) {
+    await sendText(
+      to,
+      "If your image didn't arrive, send your product photo again and pick Studio shot or Social ad post.\n\nType *balance* to check credits.",
+    );
     return;
   }
 
@@ -279,7 +331,10 @@ async function handleText(
   }
 
   if (step === "awaiting_background") {
-    await sendText(to, "Please pick a background from the list above, or send a new photo.");
+    await sendText(
+      to,
+      "Please pick a background from the list above, or send a new product photo to start over.",
+    );
     return;
   }
 
@@ -288,8 +343,10 @@ async function handleText(
     return;
   }
 
-  const quota = await getUserQuota(userId);
-  await sendWelcome(to, quota.freeRemaining || FREE_IMAGES);
+  await sendText(
+    to,
+    "Send a product photo to get started, or type *balance* / *plans* for help.",
+  );
 }
 
 export async function processWhatsAppMessage(
@@ -324,6 +381,11 @@ export async function processWhatsAppMessage(
   const replyId = getReplyId(message);
 
   if (replyId) {
+    if (replyId === "plans_menu") {
+      await sendPlansMenu(from);
+      return;
+    }
+
     const planId = parsePlanId(replyId);
     if (planId) {
       await handlePlanSelection(from, user.id, planId);
@@ -331,19 +393,14 @@ export async function processWhatsAppMessage(
     }
 
     const mode = parseModeId(replyId);
-    if (mode && conversation.input_image_url) {
-      if (conversation.step === "generating") {
-        await sendText(from, "Still working on your last image — please wait.");
-        return;
-      }
-
-      if (
-        conversation.step === "awaiting_mode" ||
-        (conversation.step === "awaiting_background" && mode === "studio")
-      ) {
-        await handleModeChoice(from, user.id, conversation.id, mode);
-        return;
-      }
+    if (
+      mode &&
+      conversation.input_image_url &&
+      (conversation.step === "awaiting_mode" ||
+        conversation.step === "awaiting_background")
+    ) {
+      await handleModeChoice(from, user.id, conversation.id, mode);
+      return;
     }
 
     const backgroundId = parseBackgroundId(replyId);

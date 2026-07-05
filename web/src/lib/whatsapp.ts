@@ -65,6 +65,63 @@ export async function sendImage(
   }
 }
 
+/** Upload PNG to Meta and send — reliable vs public URL links. */
+export async function sendImagePng(
+  to: string,
+  png: Buffer,
+  caption?: string,
+): Promise<void> {
+  const { token, phoneNumberId, version } = getConfig();
+
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", "image/png");
+  form.append(
+    "file",
+    new Blob([new Uint8Array(png)], { type: "image/png" }),
+    "velora-result.png",
+  );
+
+  const uploadRes = await fetch(
+    `${GRAPH}/${version}/${phoneNumberId}/media`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    },
+  );
+
+  if (!uploadRes.ok) {
+    throw new Error(`WhatsApp media upload failed: ${await uploadRes.text()}`);
+  }
+
+  const uploadJson = (await uploadRes.json()) as { id?: string };
+  if (!uploadJson.id) {
+    throw new Error("WhatsApp media upload missing id");
+  }
+
+  const sendRes = await fetch(
+    `${GRAPH}/${version}/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { id: uploadJson.id, caption },
+      }),
+    },
+  );
+
+  if (!sendRes.ok) {
+    throw new Error(`WhatsApp sendImagePng failed: ${await sendRes.text()}`);
+  }
+}
+
 export async function sendButtons(
   to: string,
   bodyText: string,

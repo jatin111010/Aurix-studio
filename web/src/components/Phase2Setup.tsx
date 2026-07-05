@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 
 type Health = {
   ok: boolean;
-  service: string;
-  photoroomMode: string;
-  supabaseConfigured: boolean;
   photoroomConfigured: boolean;
+  supabaseConfigured: boolean;
   whatsappConfigured: boolean;
+  razorpayConfigured: boolean;
+  razorpayWebhookConfigured: boolean;
   phase2Ready: boolean;
+  phase4Ready: boolean;
   webhookUrl: string | null;
+  razorpayWebhookUrl: string | null;
   verifyToken: string;
   missing: string[];
 };
@@ -24,7 +26,7 @@ export function Phase2Setup() {
     fetch("/api/health")
       .then((r) => r.json())
       .then((data: Health) => setHealth(data))
-      .catch(() => setError("Could not load status. Is the server running?"));
+      .catch(() => setError("Could not load status."));
   }, []);
 
   async function copy(text: string, label: string) {
@@ -40,7 +42,7 @@ export function Phase2Setup() {
   }
 
   if (!health) {
-    return <p className="text-sm text-zinc-500">Loading Phase 2 status…</p>;
+    return <p className="text-sm text-zinc-500">Loading setup status…</p>;
   }
 
   const checks = [
@@ -48,20 +50,28 @@ export function Phase2Setup() {
     { ok: health.supabaseConfigured, label: "Supabase connected" },
     { ok: Boolean(health.webhookUrl), label: "Public app URL (Vercel)" },
     { ok: health.whatsappConfigured, label: "WhatsApp token + phone number ID" },
+    { ok: health.razorpayConfigured, label: "Razorpay API keys" },
+    { ok: health.razorpayWebhookConfigured, label: "Razorpay webhook secret" },
   ];
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold text-zinc-900">Phase 2 — WhatsApp setup</h2>
+        <h2 className="font-semibold text-zinc-900">Setup checklist</h2>
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            health.phase2Ready
+            health.phase4Ready
               ? "bg-green-100 text-green-800"
-              : "bg-amber-100 text-amber-800"
+              : health.phase2Ready
+                ? "bg-blue-100 text-blue-800"
+                : "bg-amber-100 text-amber-800"
           }`}
         >
-          {health.phase2Ready ? "Ready to test" : "Setup in progress"}
+          {health.phase4Ready
+            ? "Phase 4 ready — payments live"
+            : health.phase2Ready
+              ? "Phase 2 live — add Razorpay"
+              : "Setup in progress"}
         </span>
       </div>
 
@@ -76,51 +86,52 @@ export function Phase2Setup() {
 
       {health.missing.length > 0 && (
         <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
-          <strong>Still needed on Vercel → Settings → Environment Variables:</strong>{" "}
-          {health.missing.join(", ")}
+          <strong>Still needed on Vercel env:</strong> {health.missing.join(", ")}
         </p>
       )}
 
       {health.webhookUrl && (
-        <div className="space-y-3 rounded-xl bg-zinc-50 p-4">
-          <p className="font-medium text-zinc-900">Meta Developer Console → WhatsApp → Configuration</p>
-          <div>
-            <p className="mb-1 text-xs uppercase tracking-wide text-zinc-500">Webhook URL</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <code className="break-all rounded bg-white px-2 py-1 text-xs text-zinc-800">
-                {health.webhookUrl}
-              </code>
-              <button
-                type="button"
-                onClick={() => copy(health.webhookUrl!, "webhook")}
-                className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800"
-              >
-                {copied === "webhook" ? "Copied!" : "Copy"}
-              </button>
-            </div>
+        <div className="mb-4 space-y-3 rounded-xl bg-zinc-50 p-4">
+          <p className="font-medium text-zinc-900">WhatsApp webhook (Meta Console)</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="break-all rounded bg-white px-2 py-1 text-xs">
+              {health.webhookUrl}
+            </code>
+            <button
+              type="button"
+              onClick={() => copy(health.webhookUrl!, "wa")}
+              className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white"
+            >
+              {copied === "wa" ? "Copied!" : "Copy"}
+            </button>
           </div>
-          <div>
-            <p className="mb-1 text-xs uppercase tracking-wide text-zinc-500">Verify token</p>
-            <code className="rounded bg-white px-2 py-1 text-xs">{health.verifyToken}</code>
-          </div>
-          <p className="text-xs text-zinc-500">
-            Subscribe to <strong>messages</strong>. Add your phone as a test recipient in Meta → API Setup.
+          <p className="text-xs">
+            Verify token: <code>{health.verifyToken}</code>
           </p>
         </div>
       )}
 
-      {!health.webhookUrl && (
-        <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs">
-          Set <code className="rounded bg-zinc-200 px-1">NEXT_PUBLIC_APP_URL</code> on Vercel to your
-          live URL (e.g. https://your-app.vercel.app) and redeploy to show the webhook link here.
-        </p>
+      {health.razorpayWebhookUrl && (
+        <div className="space-y-3 rounded-xl bg-zinc-50 p-4">
+          <p className="font-medium text-zinc-900">Razorpay webhook (Dashboard → Webhooks)</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="break-all rounded bg-white px-2 py-1 text-xs">
+              {health.razorpayWebhookUrl}
+            </code>
+            <button
+              type="button"
+              onClick={() => copy(health.razorpayWebhookUrl!, "rz")}
+              className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white"
+            >
+              {copied === "rz" ? "Copied!" : "Copy"}
+            </button>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Enable event: <strong>payment_link.paid</strong>. Use the webhook secret as{" "}
+            <code>RAZORPAY_WEBHOOK_SECRET</code> on Vercel.
+          </p>
+        </div>
       )}
-
-      <ol className="mt-4 list-decimal space-y-1 pl-5 text-xs">
-        <li>Paste webhook URL + verify token in Meta → click Verify and Save</li>
-        <li>Add WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID from Meta → API Setup</li>
-        <li>Redeploy Vercel, then message your WhatsApp number with a product photo</li>
-      </ol>
     </section>
   );
 }
