@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@fontsource/dejavu-sans": "^5.2.5",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/montserrat": "^5.2.8",
+    "@fontsource/poppins": "^5.2.7",
     "@supabase/supabase-js": "^2.110.0",
     "canvas": "^3.2.3",
     "dejavu-fonts-ttf": "^2.37.3",

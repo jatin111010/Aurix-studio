@@ -1,5 +1,10 @@
 import type { AdTemplateId } from "@/lib/ad-templates";
 import {
+  detectProductCategory,
+  normalizeTemplateId,
+  type ProductCategory,
+} from "@/lib/ad-category";
+import {
   getCtaText,
   getOfferBadge,
   getPurposeLabel,
@@ -18,21 +23,29 @@ export type AdBrief = AdChoices & {
   ctaId: string;
   headline: string;
   subheadline: string;
+  offer: string;
   badge: string;
   cta: string;
   showBadge: boolean;
   backgroundId: string;
   customBackgroundPrompt?: string;
+  category: ProductCategory;
 };
 
-export async function resolveAdBrief(choices: AdChoices): Promise<AdBrief> {
-  const templateId = choices.templateId ?? "festival";
+export async function resolveAdBrief(
+  choices: AdChoices,
+  imageUrl?: string,
+): Promise<AdBrief> {
+  const templateId = normalizeTemplateId(choices.templateId);
   const purposeId = choices.purposeId ?? "daily";
-  const offerId = choices.offerId ?? "15off";
+  const offerId = choices.offerId ?? "20off";
   const ctaId = choices.ctaId ?? "whatsapp";
-  const badge = getOfferBadge(offerId);
+  const offer = getOfferBadge(offerId);
   const cta = getCtaText(ctaId);
-  const showBadge = Boolean(badge);
+  const showBadge = Boolean(offer);
+
+  const category =
+    imageUrl ? await detectProductCategory(imageUrl) : "general";
 
   let headline = choices.headline?.trim() ?? "";
   let subheadline = choices.subheadline?.trim() ?? "";
@@ -46,14 +59,18 @@ export async function resolveAdBrief(choices: AdChoices): Promise<AdBrief> {
     const generated: AdCopyContent = await generateAdCopyFromBrief({
       purpose: getPurposeLabel(purposeId),
       style: templateId,
-      badge: showBadge ? badge : "",
+      offer: showBadge ? offer : "",
       cta,
+      category,
       lang: isVeloraLang(choices.lang) ? choices.lang : DEFAULT_LANG,
     });
     if (!headline || choices.headlineMode === "ai") {
       headline = generated.headline;
     }
-    if (choices.messageMode === "ai" || (!subheadline && choices.messageMode !== "custom")) {
+    if (
+      choices.messageMode === "ai" ||
+      (!subheadline && choices.messageMode !== "custom")
+    ) {
       subheadline = generated.subheadline;
     }
   }
@@ -75,11 +92,13 @@ export async function resolveAdBrief(choices: AdChoices): Promise<AdBrief> {
     ctaId,
     headline,
     subheadline,
-    badge,
+    offer,
+    badge: offer,
     cta,
     showBadge,
     backgroundId: choices.backgroundId ?? "studio",
     customBackgroundPrompt: choices.customBackgroundPrompt,
+    category,
   };
 }
 
@@ -87,6 +106,7 @@ export function briefToAdCopy(brief: AdBrief): AdCopyContent {
   return {
     headline: brief.headline,
     subheadline: brief.subheadline,
+    offer: brief.showBadge ? brief.offer : "",
     badge: brief.showBadge ? brief.badge : "",
     cta: brief.cta,
   };

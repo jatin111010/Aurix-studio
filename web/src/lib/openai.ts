@@ -1,7 +1,8 @@
 /**
- * OpenAI — Velora salesperson voice for ad copy (Hindi / Hinglish / English).
+ * OpenAI — structured marketing copy for premium social ads.
  */
 
+import type { ProductCategory } from "@/lib/ad-category";
 import {
   DEFAULT_LANG,
   openAiLanguageInstruction,
@@ -11,6 +12,7 @@ import {
 export type AdCopyContent = {
   headline: string;
   subheadline: string;
+  offer: string;
   badge: string;
   cta: string;
 };
@@ -18,31 +20,35 @@ export type AdCopyContent = {
 function fallbackCopy(
   brief: {
     purpose: string;
-    badge: string;
+    offer: string;
     cta: string;
   },
   lang: VeloraLang,
 ): AdCopyContent {
+  const offer = brief.offer;
   if (lang === "hi") {
     return {
       headline: `${brief.purpose} — आज ही ऑर्डर करें`,
-      subheadline: "ताज़ी quality · सीमित समय ऑफर",
-      badge: brief.badge || "ऑफर",
+      subheadline: "प्रीमियम क्वालिटी · सीमित समय ऑफर",
+      offer,
+      badge: offer,
       cta: brief.cta,
     };
   }
   if (lang === "hinglish") {
     return {
       headline: `${brief.purpose} — aaj hi order karein`,
-      subheadline: "Fresh quality · limited time offer",
-      badge: brief.badge || "OFFER",
+      subheadline: "Premium quality · limited time offer",
+      offer,
+      badge: offer,
       cta: brief.cta,
     };
   }
   return {
-    headline: `${brief.purpose} — order today`,
-    subheadline: "Fresh quality · limited time offer",
-    badge: brief.badge || "SPECIAL OFFER",
+    headline: `${brief.purpose} — shop today`,
+    subheadline: "Premium quality · limited time offer",
+    offer,
+    badge: offer,
     cta: brief.cta,
   };
 }
@@ -50,8 +56,9 @@ function fallbackCopy(
 export async function generateAdCopyFromBrief(brief: {
   purpose: string;
   style: string;
-  badge: string;
+  offer: string;
   cta: string;
+  category?: ProductCategory;
   lang?: VeloraLang;
 }): Promise<AdCopyContent> {
   const lang = brief.lang ?? DEFAULT_LANG;
@@ -74,29 +81,29 @@ export async function generateAdCopyFromBrief(brief: {
       messages: [
         {
           role: "system",
-          content: `You are a warm, experienced salesperson at Velora Studio — a WhatsApp service that helps Indian shop owners make product photos and social ads.
-
-Your job: write short ad text that feels human and local, like a helpful person texting on WhatsApp — NOT like corporate marketing or US-style ads.
+          content: `You write premium social-media ad copy for Indian shop owners on WhatsApp/Instagram.
+Sound like a professional Canva ad — clear, confident, locally relatable. NOT corporate jargon.
 
 Rules:
 - ${langRule}
-- headline: max 8 words, catchy but honest (product/offer focused)
-- subheadline: max 12 words, supportive detail
-- badge and cta: copy EXACTLY from the user message — do not change them
-- Never use phrases like "unleash", "trends", "elevate", "transform your business"
-- Sound like a real Indian shop assistant: friendly, clear, trustworthy
-- Return JSON only: {"headline":"...","subheadline":"...","badge":"...","cta":"..."}`,
+- headline: max 7 words, punchy product benefit
+- subheadline: max 14 words, supporting detail or urgency
+- offer: copy EXACTLY from user (e.g. "20% OFF", "BEST SELLER", "NEW ARRIVAL") — empty string if none
+- cta: copy EXACTLY from user — do not change
+- Never use: "unleash", "elevate", "transform", "revolutionary"
+- Return JSON only: {"headline":"...","subheadline":"...","offer":"...","cta":"..."}`,
         },
         {
           role: "user",
-          content: `Ad purpose: ${brief.purpose}
-Visual style: ${brief.style}
-Offer badge (use exactly): ${brief.badge || "none"}
+          content: `Purpose: ${brief.purpose}
+Visual theme: ${brief.style}
+Product category: ${brief.category ?? "general"}
+Offer badge (use exactly, or ""): ${brief.offer || "none"}
 CTA button (use exactly): ${brief.cta}`,
         },
       ],
-      max_tokens: 150,
-      temperature: 0.7,
+      max_tokens: 180,
+      temperature: 0.65,
     }),
   });
 
@@ -110,11 +117,13 @@ CTA button (use exactly): ${brief.cta}`,
     if (!raw) return base;
 
     const parsed = JSON.parse(raw) as Partial<AdCopyContent>;
+    const offer = brief.offer.slice(0, 24);
     return {
       headline: parsed.headline?.slice(0, 60) || base.headline,
-      subheadline: parsed.subheadline?.slice(0, 80) || base.subheadline,
-      badge: brief.badge.slice(0, 24),
-      cta: brief.cta.slice(0, 24),
+      subheadline: parsed.subheadline?.slice(0, 90) || base.subheadline,
+      offer,
+      badge: offer,
+      cta: brief.cta.slice(0, 28),
     };
   } catch {
     return base;

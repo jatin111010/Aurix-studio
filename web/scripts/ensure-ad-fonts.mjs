@@ -1,39 +1,79 @@
 import fs from "fs";
 import path from "path";
-import { createRequire } from "module";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 const fontDir = path.join(__dirname, "../assets/fonts");
 
-const copies = [
-  ["DejaVuSans.ttf", "DejaVuSans.ttf"],
-  ["DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"],
+/** Google Fonts TTF files (OFL licensed) for node-canvas ad rendering. */
+const FONTS = [
+  {
+    name: "Poppins-Regular.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Regular.ttf",
+    ],
+  },
+  {
+    name: "Poppins-Bold.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf",
+    ],
+  },
+  {
+    name: "Montserrat-Regular.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Regular.ttf",
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf",
+    ],
+  },
+  {
+    name: "Montserrat-Bold.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Bold.ttf",
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf",
+    ],
+  },
+  {
+    name: "Inter-Regular.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter_18pt-Regular.ttf",
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+    ],
+  },
+  {
+    name: "Inter-Bold.ttf",
+    urls: [
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter_18pt-Bold.ttf",
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+    ],
+  },
 ];
 
 await fs.promises.mkdir(fontDir, { recursive: true });
 
-let sourceDir;
-try {
-  const pkgRoot = path.dirname(
-    require.resolve("dejavu-fonts-ttf/package.json"),
-  );
-  sourceDir = path.join(pkgRoot, "ttf");
-} catch {
-  throw new Error("dejavu-fonts-ttf is not installed. Run: npm install");
+async function downloadFont(name, urls) {
+  const dest = path.join(fontDir, name);
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 10_000) {
+    return;
+  }
+
+  for (const url of urls) {
+    const response = await fetch(url);
+    if (!response.ok) continue;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length < 10_000) continue;
+
+    await fs.promises.writeFile(dest, buffer);
+    console.log(`Downloaded ${name}`);
+    return;
+  }
+
+  throw new Error(`Failed to download font ${name}`);
 }
 
-for (const [srcName, destName] of copies) {
-  const src = path.join(sourceDir, srcName);
-  const dest = path.join(fontDir, destName);
-  if (!fs.existsSync(src)) {
-    throw new Error(`Missing font in package: ${srcName}`);
-  }
-  if (!fs.existsSync(dest)) {
-    await fs.promises.copyFile(src, dest);
-    console.log(`Copied ${destName}`);
-  }
+for (const font of FONTS) {
+  await downloadFont(font.name, font.urls);
 }
 
 console.log("Ad fonts ready in assets/fonts");

@@ -313,7 +313,8 @@ export async function handleAdCustomBackgroundText(
 
 export function parseAdStyleId(replyId: string): AdTemplateId | null {
   if (!replyId.startsWith("ad_style_")) return null;
-  const id = replyId.slice(9) as AdTemplateId;
+  const raw = replyId.slice(9);
+  const id = (raw === "bold" ? "electronics" : raw) as AdTemplateId;
   return AD_STYLES.some((s) => s.id === id) ? id : null;
 }
 

@@ -2,6 +2,7 @@ import { resolveBackground, resolveBackgroundAsync } from "@/lib/backgrounds";
 import { BACKGROUND_CUSTOM_ID } from "@/lib/config";
 import { briefToAdCopy, resolveAdBrief, type AdBrief } from "@/lib/ad-brief";
 import { compositeAdPost } from "@/lib/ad-composite";
+import { extractBrandColors } from "@/lib/ad-colors";
 import type { AdCopyContent } from "@/lib/openai";
 import type { AdChoices } from "@/lib/ad-options";
 import { diecutImage, editImage, getPhotoroomMode } from "@/lib/photoroom";
@@ -69,20 +70,25 @@ export async function buildAdImage(
   inputImageUrl: string,
   choices: AdChoices,
 ): Promise<BuiltAdImage> {
-  const brief = await resolveAdBrief(choices);
+  const brief = await resolveAdBrief(choices, inputImageUrl);
   const adCopy = briefToAdCopy(brief);
 
-  // Clean product cutout — no messy square photo on the ad layout
   const productCutout = await diecutImage({
     imageUrl: inputImageUrl,
     padding: 0.06,
   });
 
+  const brandPalette = await extractBrandColors(productCutout);
+
   const png = await compositeAdPost(
     productCutout,
     adCopy,
     brief.templateId,
-    brief.backgroundId,
+    {
+      backgroundId: brief.backgroundId,
+      category: brief.category,
+      brandPalette,
+    },
   );
 
   return {

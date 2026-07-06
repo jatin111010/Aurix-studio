@@ -3,19 +3,34 @@ import type { AdTemplateId } from "@/lib/ad-templates";
 
 export const AD_STYLES = [
   {
-    id: "festival" as AdTemplateId,
-    label: "Festival sale",
-    description: "Warm colors, festive vibe",
+    id: "luxury" as AdTemplateId,
+    label: "Luxury",
+    description: "Gold & black premium look",
   },
   {
     id: "minimal" as AdTemplateId,
-    label: "Clean minimal",
-    description: "Light, elegant, premium",
+    label: "Minimal",
+    description: "Clean white, elegant spacing",
   },
   {
-    id: "bold" as AdTemplateId,
-    label: "Bold promo",
-    description: "Strong, eye-catching",
+    id: "festival" as AdTemplateId,
+    label: "Festival",
+    description: "Warm festive sale vibe",
+  },
+  {
+    id: "grocery" as AdTemplateId,
+    label: "Grocery",
+    description: "Fresh green, food & essentials",
+  },
+  {
+    id: "fashion" as AdTemplateId,
+    label: "Fashion",
+    description: "Editorial blush & rose tones",
+  },
+  {
+    id: "electronics" as AdTemplateId,
+    label: "Electronics",
+    description: "Tech blue, bold & modern",
   },
 ];
 
@@ -43,9 +58,11 @@ export const AD_PURPOSES = [
 ];
 
 export const AD_OFFERS = [
-  { id: "10off", label: "10% OFF", badge: "10% OFF" },
-  { id: "15off", label: "15% OFF", badge: "15% OFF" },
   { id: "20off", label: "20% OFF", badge: "20% OFF" },
+  { id: "15off", label: "15% OFF", badge: "15% OFF" },
+  { id: "10off", label: "10% OFF", badge: "10% OFF" },
+  { id: "bestseller", label: "Best Seller", badge: "BEST SELLER" },
+  { id: "newarrival", label: "New Arrival", badge: "NEW ARRIVAL" },
   { id: "freeship", label: "Free delivery", badge: "FREE DELIVERY" },
   { id: "none", label: "No offer badge", badge: "" },
 ];
@@ -73,11 +90,11 @@ export type AdChoices = {
 };
 
 export function getStyleLabel(templateId?: string): string {
-  return AD_STYLES.find((s) => s.id === templateId)?.label ?? "Festival sale";
+  return AD_STYLES.find((s) => s.id === templateId)?.label ?? "Minimal";
 }
 
 export function getOfferBadge(offerId?: string): string {
-  return AD_OFFERS.find((o) => o.id === offerId)?.badge ?? "15% OFF";
+  return AD_OFFERS.find((o) => o.id === offerId)?.badge ?? "20% OFF";
 }
 
 export function getCtaText(ctaId?: string): string {

@@ -1,13 +1,29 @@
-/** Visual ad post templates (1080×1080) — distinct layouts per style. */
+/** Premium Canva-style ad templates (1080×1080). */
 
-export type AdTemplateId = "festival" | "minimal" | "bold";
+import { applyBrandPalette, type BrandPalette } from "@/lib/ad-colors";
+import {
+  getLayoutProfile,
+  type LayoutProfile,
+  type ProductCategory,
+} from "@/lib/ad-category";
+import { AD_SIZE } from "@/lib/ad-layout-grid";
+
+export { AD_SIZE };
+
+export type AdTemplateId =
+  | "luxury"
+  | "minimal"
+  | "festival"
+  | "grocery"
+  | "fashion"
+  | "electronics";
+
+export type AdFontFamily = "Poppins" | "Montserrat" | "Inter";
 
 export type AdTemplate = {
   id: AdTemplateId;
   label: string;
-  /** Full-canvas gradient */
   background: { top: string; bottom: string };
-  /** Top header band — headline always sits here for contrast */
   header: {
     height: number;
     fill: string;
@@ -15,7 +31,14 @@ export type AdTemplate = {
     subColor: string;
     accentLine: string;
   };
-  /** Product stage */
+  typography: {
+    headlineFamily: AdFontFamily;
+    bodyFamily: AdFontFamily;
+    headlineSize: number;
+    subSize: number;
+    badgeSize: number;
+    ctaSize: number;
+  };
   product: {
     centerY: number;
     maxWidthRatio: number;
@@ -23,7 +46,6 @@ export type AdTemplate = {
     shadowColor: string;
     glowColor: string;
   };
-  /** Offer badge */
   badge: {
     bg: string;
     text: string;
@@ -32,7 +54,6 @@ export type AdTemplate = {
     top: number;
     right: number;
   };
-  /** CTA bar at bottom */
   cta: {
     bg: string;
     text: string;
@@ -44,34 +65,142 @@ export type AdTemplate = {
     accent: string;
     showCornerOrbs: boolean;
     showSideStripe: boolean;
+    showPedestal: boolean;
+    showDivider: boolean;
   };
 };
 
 export const AD_TEMPLATES: Record<AdTemplateId, AdTemplate> = {
+  luxury: {
+    id: "luxury",
+    label: "Luxury",
+    background: { top: "#0c0a09", bottom: "#292524" },
+    header: {
+      height: 292,
+      fill: "rgba(12, 10, 9, 0.94)",
+      headlineColor: "#fafaf9",
+      subColor: "rgba(250, 250, 249, 0.78)",
+      accentLine: "#d4af37",
+    },
+    typography: {
+      headlineFamily: "Montserrat",
+      bodyFamily: "Inter",
+      headlineSize: 46,
+      subSize: 24,
+      badgeSize: 26,
+      ctaSize: 28,
+    },
+    product: {
+      centerY: 0.53,
+      maxWidthRatio: 0.68,
+      maxHeightRatio: 0.52,
+      shadowColor: "rgba(0,0,0,0.5)",
+      glowColor: "rgba(212, 175, 55, 0.14)",
+    },
+    badge: {
+      bg: "#b8860b",
+      text: "#ffffff",
+      width: 208,
+      height: 56,
+      top: 50,
+      right: 44,
+    },
+    cta: {
+      bg: "#d4af37",
+      text: "#1c1917",
+      height: 74,
+      bottom: 46,
+      width: 396,
+    },
+    decor: {
+      accent: "#d4af37",
+      showCornerOrbs: false,
+      showSideStripe: false,
+      showPedestal: true,
+      showDivider: false,
+    },
+  },
+  minimal: {
+    id: "minimal",
+    label: "Minimal",
+    background: { top: "#ffffff", bottom: "#f5f5f4" },
+    header: {
+      height: 276,
+      fill: "rgba(255, 255, 255, 0.98)",
+      headlineColor: "#1c1917",
+      subColor: "#57534e",
+      accentLine: "#a8a29e",
+    },
+    typography: {
+      headlineFamily: "Inter",
+      bodyFamily: "Inter",
+      headlineSize: 44,
+      subSize: 23,
+      badgeSize: 25,
+      ctaSize: 27,
+    },
+    product: {
+      centerY: 0.54,
+      maxWidthRatio: 0.7,
+      maxHeightRatio: 0.52,
+      shadowColor: "rgba(28, 25, 23, 0.16)",
+      glowColor: "rgba(255, 255, 255, 0.95)",
+    },
+    badge: {
+      bg: "#1c1917",
+      text: "#fafaf9",
+      width: 198,
+      height: 52,
+      top: 54,
+      right: 48,
+    },
+    cta: {
+      bg: "#1c1917",
+      text: "#fafaf9",
+      height: 70,
+      bottom: 50,
+      width: 372,
+    },
+    decor: {
+      accent: "#78716c",
+      showCornerOrbs: false,
+      showSideStripe: false,
+      showPedestal: false,
+      showDivider: true,
+    },
+  },
   festival: {
     id: "festival",
-    label: "Festival sale",
-    background: { top: "#2d0a00", bottom: "#7c2d12" },
+    label: "Festival",
+    background: { top: "#450a0a", bottom: "#9a3412" },
     header: {
-      height: 300,
-      fill: "rgba(120, 20, 10, 0.92)",
+      height: 296,
+      fill: "rgba(69, 10, 10, 0.93)",
       headlineColor: "#fffbeb",
       subColor: "#fde68a",
       accentLine: "#fbbf24",
     },
+    typography: {
+      headlineFamily: "Poppins",
+      bodyFamily: "Poppins",
+      headlineSize: 48,
+      subSize: 25,
+      badgeSize: 27,
+      ctaSize: 29,
+    },
     product: {
-      centerY: 0.58,
-      maxWidthRatio: 0.68,
-      maxHeightRatio: 0.48,
+      centerY: 0.55,
+      maxWidthRatio: 0.7,
+      maxHeightRatio: 0.5,
       shadowColor: "rgba(0,0,0,0.45)",
-      glowColor: "rgba(251, 191, 36, 0.15)",
+      glowColor: "rgba(251, 191, 36, 0.16)",
     },
     badge: {
       bg: "#dc2626",
       text: "#ffffff",
-      width: 210,
+      width: 214,
       height: 58,
-      top: 48,
+      top: 46,
       right: 40,
     },
     cta: {
@@ -79,104 +208,168 @@ export const AD_TEMPLATES: Record<AdTemplateId, AdTemplate> = {
       text: "#1c0a00",
       height: 76,
       bottom: 44,
-      width: 400,
+      width: 404,
     },
     decor: {
       accent: "#fbbf24",
       showCornerOrbs: true,
       showSideStripe: false,
+      showPedestal: false,
+      showDivider: false,
     },
   },
-  minimal: {
-    id: "minimal",
-    label: "Clean minimal",
-    background: { top: "#ffffff", bottom: "#f5f5f4" },
+  grocery: {
+    id: "grocery",
+    label: "Grocery",
+    background: { top: "#f0fdf4", bottom: "#86efac" },
     header: {
-      height: 280,
-      fill: "rgba(255, 255, 255, 0.97)",
-      headlineColor: "#1c1917",
-      subColor: "#44403c",
-      accentLine: "#b45309",
+      height: 268,
+      fill: "rgba(255, 255, 255, 0.96)",
+      headlineColor: "#14532d",
+      subColor: "#166534",
+      accentLine: "#22c55e",
+    },
+    typography: {
+      headlineFamily: "Poppins",
+      bodyFamily: "Poppins",
+      headlineSize: 46,
+      subSize: 24,
+      badgeSize: 26,
+      ctaSize: 28,
     },
     product: {
-      centerY: 0.57,
-      maxWidthRatio: 0.7,
-      maxHeightRatio: 0.5,
-      shadowColor: "rgba(28, 25, 23, 0.18)",
-      glowColor: "rgba(255, 255, 255, 0.9)",
+      centerY: 0.54,
+      maxWidthRatio: 0.76,
+      maxHeightRatio: 0.52,
+      shadowColor: "rgba(20, 83, 45, 0.2)",
+      glowColor: "rgba(134, 239, 172, 0.35)",
     },
     badge: {
-      bg: "#1c1917",
-      text: "#fafaf9",
-      width: 200,
-      height: 54,
-      top: 52,
-      right: 44,
+      bg: "#16a34a",
+      text: "#ffffff",
+      width: 210,
+      height: 56,
+      top: 48,
+      right: 42,
     },
     cta: {
-      bg: "#1c1917",
-      text: "#fafaf9",
-      height: 72,
-      bottom: 48,
-      width: 380,
+      bg: "#15803d",
+      text: "#ffffff",
+      height: 74,
+      bottom: 46,
+      width: 392,
     },
     decor: {
-      accent: "#b45309",
+      accent: "#22c55e",
       showCornerOrbs: false,
       showSideStripe: false,
+      showPedestal: false,
+      showDivider: true,
     },
   },
-  bold: {
-    id: "bold",
-    label: "Bold promo",
-    background: { top: "#0f172a", bottom: "#1e3a8a" },
+  fashion: {
+    id: "fashion",
+    label: "Fashion",
+    background: { top: "#fdf2f8", bottom: "#fbcfe8" },
     header: {
-      height: 320,
+      height: 288,
+      fill: "rgba(253, 242, 248, 0.97)",
+      headlineColor: "#831843",
+      subColor: "#9d174d",
+      accentLine: "#db2777",
+    },
+    typography: {
+      headlineFamily: "Montserrat",
+      bodyFamily: "Inter",
+      headlineSize: 45,
+      subSize: 23,
+      badgeSize: 25,
+      ctaSize: 27,
+    },
+    product: {
+      centerY: 0.51,
+      maxWidthRatio: 0.64,
+      maxHeightRatio: 0.56,
+      shadowColor: "rgba(131, 24, 67, 0.18)",
+      glowColor: "rgba(251, 207, 232, 0.5)",
+    },
+    badge: {
+      bg: "#be185d",
+      text: "#ffffff",
+      width: 204,
+      height: 54,
+      top: 52,
+      right: 46,
+    },
+    cta: {
+      bg: "#831843",
+      text: "#ffffff",
+      height: 72,
+      bottom: 48,
+      width: 384,
+    },
+    decor: {
+      accent: "#db2777",
+      showCornerOrbs: false,
+      showSideStripe: true,
+      showPedestal: false,
+      showDivider: false,
+    },
+  },
+  electronics: {
+    id: "electronics",
+    label: "Electronics",
+    background: { top: "#0f172a", bottom: "#1e40af" },
+    header: {
+      height: 284,
       fill: "rgba(15, 23, 42, 0.95)",
-      headlineColor: "#ffffff",
+      headlineColor: "#f8fafc",
       subColor: "#93c5fd",
       accentLine: "#38bdf8",
     },
+    typography: {
+      headlineFamily: "Inter",
+      bodyFamily: "Inter",
+      headlineSize: 46,
+      subSize: 24,
+      badgeSize: 26,
+      ctaSize: 28,
+    },
     product: {
-      centerY: 0.59,
-      maxWidthRatio: 0.72,
-      maxHeightRatio: 0.5,
-      shadowColor: "rgba(0,0,0,0.5)",
-      glowColor: "rgba(56, 189, 248, 0.12)",
+      centerY: 0.55,
+      maxWidthRatio: 0.78,
+      maxHeightRatio: 0.48,
+      shadowColor: "rgba(0,0,0,0.48)",
+      glowColor: "rgba(56, 189, 248, 0.14)",
     },
     badge: {
-      bg: "#f97316",
+      bg: "#2563eb",
       text: "#ffffff",
-      width: 215,
-      height: 58,
-      top: 46,
-      right: 36,
+      width: 212,
+      height: 56,
+      top: 48,
+      right: 38,
     },
     cta: {
       bg: "#ffffff",
       text: "#0f172a",
       height: 74,
       bottom: 46,
-      width: 390,
+      width: 388,
     },
     decor: {
       accent: "#38bdf8",
       showCornerOrbs: false,
       showSideStripe: true,
+      showPedestal: false,
+      showDivider: false,
     },
   },
 };
 
-export const AD_SIZE = 1080;
-
-/** Merchant background choice tints the canvas — header/CTA bands keep text readable. */
 const AD_BACKGROUND_MOODS: Record<
   string,
-  {
-    gradient: { top: string; bottom: string };
-    glow: string;
-    accent?: string;
-  }
+  { gradient: { top: string; bottom: string }; glow: string; accent?: string }
 > = {
   marble: {
     gradient: { top: "#f8fafc", bottom: "#cbd5e1" },
@@ -231,14 +424,10 @@ function applyBackgroundMood(
 ): AdTemplate {
   const mood = AD_BACKGROUND_MOODS[backgroundId];
   if (!mood) return template;
-
   return {
     ...template,
     background: mood.gradient,
-    product: {
-      ...template.product,
-      glowColor: mood.glow,
-    },
+    product: { ...template.product, glowColor: mood.glow },
     decor: {
       ...template.decor,
       accent: mood.accent ?? template.decor.accent,
@@ -246,13 +435,52 @@ function applyBackgroundMood(
   };
 }
 
+function applyLayoutProfile(
+  template: AdTemplate,
+  profile: LayoutProfile,
+): AdTemplate {
+  return {
+    ...template,
+    header: { ...template.header, height: profile.headerHeight },
+    product: {
+      ...template.product,
+      centerY: profile.productCenterY,
+      maxWidthRatio: profile.productMaxWidthRatio,
+      maxHeightRatio: profile.productMaxHeightRatio,
+    },
+  };
+}
+
+export type AdRenderContext = {
+  templateId: AdTemplateId;
+  backgroundId?: string;
+  category?: ProductCategory;
+  brandPalette?: BrandPalette;
+};
+
+export function buildAdTemplate(ctx: AdRenderContext): AdTemplate {
+  const base = AD_TEMPLATES[ctx.templateId];
+  const category = ctx.category ?? "general";
+  const profile = getLayoutProfile(category);
+
+  let template = applyLayoutProfile(base, profile);
+  template = applyBackgroundMood(template, ctx.backgroundId ?? "studio");
+
+  if (ctx.brandPalette) {
+    template = applyBrandPalette(template, ctx.brandPalette, 0.32);
+  }
+
+  return template;
+}
+
 export function getAdTemplate(id: AdTemplateId): AdTemplate {
   return AD_TEMPLATES[id];
 }
 
+/** @deprecated Use buildAdTemplate */
 export function getAdTemplateForBrief(
   templateId: AdTemplateId,
   backgroundId: string,
 ): AdTemplate {
-  return applyBackgroundMood(AD_TEMPLATES[templateId], backgroundId);
+  return buildAdTemplate({ templateId, backgroundId });
 }
