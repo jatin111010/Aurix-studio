@@ -21,24 +21,40 @@ export type BuiltStudioSet = {
   choices: StudioChoices;
 };
 
-export async function buildStudioVariations(
+function photoroomEnhancements(qualityId: StudioChoices["qualityId"]) {
+  const q = qualityId ?? "standard";
+  return {
+    // Cutout is already clean — beautify adds ~15–25s per image and often isn't needed.
+    beautifyMode: undefined as undefined,
+    lightingMode: "ai.preserve-hue-and-saturation" as const,
+    // Upscale is slow — only for Ultra HD to avoid Vercel timeouts.
+    upscaleMode: q === "ultra" ? ("ai.slow" as const) : undefined,
+  };
+}
+
+/**
+ * Build studio variations one-by-one and call `onVariation` as each finishes.
+ * Sends images to the user progressively so a slow 3rd render doesn't block delivery.
+ */
+export async function buildStudioVariationsProgressive(
   inputImageUrl: string,
   choices: StudioChoices,
+  onVariation: (variation: StudioVariation) => Promise<void>,
 ): Promise<BuiltStudioSet> {
   if (choices.studioStyle === "diecut" || choices.styleId === "diecut") {
     const png = await diecutImage({
       imageUrl: inputImageUrl,
       padding: 0.05,
     });
+    const variation: StudioVariation = {
+      label: "A",
+      png,
+      styleLabel: "Transparent PNG",
+      mood: "diecut",
+    };
+    await onVariation(variation);
     return {
-      variations: [
-        {
-          label: "A",
-          png,
-          styleLabel: "Transparent PNG",
-          mood: "diecut",
-        },
-      ],
+      variations: [variation],
       studioStyle: "diecut",
       backgroundId: "diecut",
       photoroomMode: getPhotoroomMode(),
@@ -46,46 +62,40 @@ export async function buildStudioVariations(
     };
   }
 
-  // Key quality fix:
-  // First create a clean cutout, then generate backgrounds behind that cutout.
-  // This prevents extra objects from the original photo (e.g. props, frames, table edges)
-  // from leaking into the final studio shot.
   const cutoutPng = await diecutImage({
     imageUrl: inputImageUrl,
     padding: 0.02,
   });
 
   const plans = await buildVariationPlans(choices);
-
   const qualityId = choices.qualityId ?? "standard";
-  const upscaleMode =
-    qualityId === "ultra" ? "ai.slow" : qualityId === "hd" ? "ai.fast" : undefined;
-  const beautifyMode = "ai.auto" as const;
-  const lightingMode = "ai.preserve-hue-and-saturation" as const;
-
+  const enhancements = photoroomEnhancements(qualityId);
   const seedBase = stableSeedFromText(`${inputImageUrl}|${choices.styleId}|${qualityId}`);
 
-  const results = await Promise.all(
-    plans.map(async (plan, idx) => {
-      const png = await editImage({
-        imageFile: cutoutPng,
-        imageFileName: "product.png",
-        backgroundPrompt: plan.backgroundPrompt,
-        backgroundSeed: seedBase + idx * 101,
-        expandPromptMode: "ai.never",
-        beautifyMode,
-        lightingMode,
-        upscaleMode,
-        padding: plan.padding,
-      });
-      return {
-        label: plan.label,
-        png,
-        styleLabel: plan.styleLabel,
-        mood: plan.mood,
-      };
-    }),
-  );
+  const variations: StudioVariation[] = [];
+
+  // Sequential — avoids 3 heavy parallel Photoroom calls hitting the timeout.
+  for (let idx = 0; idx < plans.length; idx += 1) {
+    const plan = plans[idx];
+    const png = await editImage({
+      imageFile: cutoutPng,
+      imageFileName: "product.png",
+      backgroundPrompt: plan.backgroundPrompt,
+      backgroundSeed: seedBase + idx * 101,
+      expandPromptMode: "ai.never",
+      ...enhancements,
+      padding: plan.padding,
+    });
+
+    const variation: StudioVariation = {
+      label: plan.label,
+      png,
+      styleLabel: plan.styleLabel,
+      mood: plan.mood,
+    };
+    variations.push(variation);
+    await onVariation(variation);
+  }
 
   const primaryStyle =
     choices.styleId === "ai_recommended"
@@ -93,7 +103,7 @@ export async function buildStudioVariations(
       : choices.styleId;
 
   return {
-    variations: results,
+    variations,
     studioStyle: "scene",
     backgroundId: primaryStyle,
     photoroomMode: getPhotoroomMode(),
@@ -101,8 +111,15 @@ export async function buildStudioVariations(
   };
 }
 
+/** @deprecated Use buildStudioVariationsProgressive */
+export async function buildStudioVariations(
+  inputImageUrl: string,
+  choices: StudioChoices,
+): Promise<BuiltStudioSet> {
+  return buildStudioVariationsProgressive(inputImageUrl, choices, async () => {});
+}
+
 function stableSeedFromText(text: string): number {
-  // Simple deterministic hash → positive 32-bit int
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
     h ^= text.charCodeAt(i);

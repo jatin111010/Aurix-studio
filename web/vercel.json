@@ -1,10 +1,10 @@
 {
   "functions": {
     "src/app/api/generate/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "src/app/api/webhooks/whatsapp/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }

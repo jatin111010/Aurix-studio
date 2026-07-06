@@ -2,7 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { processWhatsAppWebhook } from "@/lib/whatsapp-handler";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /** Meta webhook verification */
 export async function GET(request: NextRequest) {

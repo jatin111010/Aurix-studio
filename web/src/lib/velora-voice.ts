@@ -160,9 +160,9 @@ const COPY = {
       "Jo scene dimaag mein hai, ek short line mein bata do.\n\nJaise: *wooden kitchen counter* ya *soft blue minimalist backdrop*",
   },
   studio_generating: {
-    en: "Perfect — creating 3 premium studio variations for you. About 30–60 seconds ⏳",
-    hi: "बढ़िया — 3 premium studio variations बना रही हूँ। लगभग 30–60 सेकंड ⏳",
-    hinglish: "Perfect — 3 premium studio variations bana rahi hoon. 30–60 second lagenge ⏳",
+    en: "Perfect — creating 3 premium studio variations. Images will arrive one by one (about 1–2 min total) ⏳",
+    hi: "बढ़िया — 3 premium studio variations बना रही हूँ। Images एक-एक करके आएंगी (लगभग 1–2 मिनट) ⏳",
+    hinglish: "Perfect — 3 premium studio variations bana rahi hoon. Images ek-ek karke aayengi (1–2 min total) ⏳",
   },
   diecut_generating: {
     en: "On it — creating your die-cut (transparent PNG). About 10–20 seconds ⏳",

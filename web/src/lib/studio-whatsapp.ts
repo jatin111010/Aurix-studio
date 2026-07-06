@@ -6,7 +6,7 @@ import {
 import { sendPaywallMessage } from "@/lib/paywall";
 import { analyzeProduct, type ProductAnalysis } from "@/lib/studio-analysis";
 import {
-  buildStudioVariations,
+  buildStudioVariationsProgressive,
   saveStudioSet,
   type BuiltStudioSet,
 } from "@/lib/studio-generation";
@@ -30,8 +30,8 @@ import {
   type StudioChoices,
   type StudioStyleId,
 } from "@/lib/studio-options";
+import { getPhotoroomMode } from "@/lib/photoroom";
 import { styleListRows } from "@/lib/studio-recommendations";
-import { getResolvedStyleLabel } from "@/lib/studio-prompt";
 import {
   DEFAULT_LANG,
   isVeloraLang,
@@ -213,9 +213,31 @@ async function runStudioGeneration(
 
   try {
     const credit = await checkStudioCredit(userId);
-    const built = await buildStudioVariations(inputImageUrl, choices);
+    const sandbox =
+      getPhotoroomMode() === "sandbox" ? "\n(sandbox preview)" : "";
+
+    const built = await buildStudioVariationsProgressive(
+      inputImageUrl,
+      choices,
+      async (v) => {
+        if (choices.studioStyle === "diecut" || choices.styleId === "diecut") {
+          await sendImagePng(
+            to,
+            v.png,
+            `Velora Studio — Transparent PNG${sandbox}\nUse on catalog, Instagram, or any background.`,
+          );
+        } else {
+          await sendImagePng(
+            to,
+            v.png,
+            `Variation ${v.label} — ${v.styleLabel}${sandbox}`,
+          );
+        }
+      },
+    );
+
     await saveStudioSet(userId, inputImageUrl, built, credit);
-    await deliverStudioResults(to, conversationId, built, lang);
+    await finishStudioDelivery(to, conversationId, built, lang);
   } catch (error) {
     if (error instanceof PaywallError) {
       await updateConversation(conversationId, {
@@ -234,30 +256,13 @@ async function runStudioGeneration(
   }
 }
 
-async function deliverStudioResults(
+async function finishStudioDelivery(
   to: string,
   conversationId: string,
   built: BuiltStudioSet,
   lang: VeloraLang,
 ): Promise<void> {
-  const sandbox =
-    built.photoroomMode === "sandbox" ? "\n(sandbox preview)" : "";
-
-  if (built.studioStyle === "diecut") {
-    const v = built.variations[0];
-    await sendImagePng(
-      to,
-      v.png,
-      `Velora Studio — Transparent PNG${sandbox}\nUse on catalog, Instagram, or any background.`,
-    );
-  } else {
-    for (const v of built.variations) {
-      await sendImagePng(
-        to,
-        v.png,
-        `Variation ${v.label} — ${v.styleLabel}${sandbox}`,
-      );
-    }
+  if (built.studioStyle !== "diecut") {
     await sendText(to, say(lang, "studio_variations_done"));
   }
 
