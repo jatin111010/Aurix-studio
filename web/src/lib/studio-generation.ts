@@ -46,13 +46,36 @@ export async function buildStudioVariations(
     };
   }
 
+  // Key quality fix:
+  // First create a clean cutout, then generate backgrounds behind that cutout.
+  // This prevents extra objects from the original photo (e.g. props, frames, table edges)
+  // from leaking into the final studio shot.
+  const cutoutPng = await diecutImage({
+    imageUrl: inputImageUrl,
+    padding: 0.02,
+  });
+
   const plans = await buildVariationPlans(choices);
 
+  const qualityId = choices.qualityId ?? "standard";
+  const upscaleMode =
+    qualityId === "ultra" ? "ai.slow" : qualityId === "hd" ? "ai.fast" : undefined;
+  const beautifyMode = "ai.auto" as const;
+  const lightingMode = "ai.preserve-hue-and-saturation" as const;
+
+  const seedBase = stableSeedFromText(`${inputImageUrl}|${choices.styleId}|${qualityId}`);
+
   const results = await Promise.all(
-    plans.map(async (plan) => {
+    plans.map(async (plan, idx) => {
       const png = await editImage({
-        imageUrl: inputImageUrl,
+        imageFile: cutoutPng,
+        imageFileName: "product.png",
         backgroundPrompt: plan.backgroundPrompt,
+        backgroundSeed: seedBase + idx * 101,
+        expandPromptMode: "ai.never",
+        beautifyMode,
+        lightingMode,
+        upscaleMode,
         padding: plan.padding,
       });
       return {
@@ -76,6 +99,16 @@ export async function buildStudioVariations(
     photoroomMode: getPhotoroomMode(),
     choices,
   };
+}
+
+function stableSeedFromText(text: string): number {
+  // Simple deterministic hash → positive 32-bit int
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h) % 1_000_000_000;
 }
 
 export async function saveStudioSet(

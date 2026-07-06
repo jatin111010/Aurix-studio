@@ -19,6 +19,27 @@ export type PhotoroomEditOptions = {
   backgroundPrompt?: string;
   /** Hex without #, e.g. F5F5F5 — used when no AI prompt */
   backgroundColor?: string;
+  /**
+   * Seed for AI background generation (makes results more stable for the same prompt).
+   * Use different seeds to force genuinely different variations.
+   */
+  backgroundSeed?: number;
+  /**
+   * Controls prompt expansion behavior. When set to `ai.never`, Photoroom will not
+   * auto-expand the prompt (often improves prompt adherence for packshots).
+   *
+   * OpenAPI shows `expandPrompt.mode` affecting `background.prompt`.
+   */
+  expandPromptMode?: "ai.auto" | "ai.never";
+  /**
+   * Relighting on the main image. `ai.preserve-hue-and-saturation` usually keeps
+   * packaging colors more accurate.
+   */
+  lightingMode?: "ai.auto" | "ai.preserve-hue-and-saturation" | "ai.optimize-portrait";
+  /** Beautify pass for packshot-style product images. */
+  beautifyMode?: "ai.auto" | "ai.food" | "ai.car";
+  /** Upscale the output for sharper results (slow = best quality). */
+  upscaleMode?: "ai.fast" | "ai.slow";
   /** Omit or pass null when using AI backgrounds (they already include shadows). */
   shadowMode?: "ai.soft" | "ai.hard" | "ai.floating" | null;
   padding?: number;
@@ -76,10 +97,26 @@ export async function editImage(
 
   if (options.backgroundPrompt) {
     form.append("background.prompt", options.backgroundPrompt);
+    if (typeof options.backgroundSeed === "number") {
+      form.append("background.seed", String(options.backgroundSeed));
+    }
+    if (options.expandPromptMode) {
+      form.append("expandPrompt.mode", options.expandPromptMode);
+    }
   } else if (options.backgroundColor) {
     form.append("background.color", options.backgroundColor.replace("#", ""));
   } else {
     form.append("background.color", "F5F5F5");
+  }
+
+  if (options.lightingMode) {
+    form.append("lighting.mode", options.lightingMode);
+  }
+  if (options.beautifyMode) {
+    form.append("beautify.mode", options.beautifyMode);
+  }
+  if (options.upscaleMode) {
+    form.append("upscale.mode", options.upscaleMode);
   }
 
   // AI backgrounds already include lighting/shadows. Combining them with
