@@ -36,6 +36,8 @@ export type ProductAnalysis = {
   recommendedStyleLabel: string;
   recommendedAngleId: CameraAngleId;
   recommendedLightingId: LightingId;
+  /** Where this product is naturally photographed in real life */
+  idealSetting?: string;
 };
 
 const VALID_CATEGORIES = new Set<string>([
@@ -101,7 +103,8 @@ Return JSON only:
   "hasTransparency": boolean,
   "recommendedStyleId": "white_studio|luxury_black|luxury_white|marble|wooden|minimal|festival|kitchen|reflection|gold|dark|floating|concrete|outdoor|living_room|modern_home|office|lifestyle|fashion_studio|ecommerce",
   "recommendedAngleId": "front|angle_45|top|closeup|floating",
-  "recommendedLightingId": "soft|bright|luxury|warm|dramatic"
+  "recommendedLightingId": "soft|bright|luxury|warm|dramatic",
+  "idealSetting": "one short phrase for the most realistic real-world photo location for this exact product, e.g. premium dry fruit gift display on wooden kitchen counter, or cosmetic bottle on marble vanity — NOT generic"
 }`,
           },
           {
@@ -112,7 +115,7 @@ Return JSON only:
             ],
           },
         ],
-        max_tokens: 300,
+        max_tokens: 380,
         temperature: 0.3,
       }),
     });
@@ -148,6 +151,7 @@ Return JSON only:
       recommendedStyleLabel: styleLabel,
       recommendedAngleId: (parsed.recommendedAngleId ?? "front") as CameraAngleId,
       recommendedLightingId: (parsed.recommendedLightingId ?? "soft") as LightingId,
+      idealSetting: parsed.idealSetting?.slice(0, 120),
     };
   } catch {
     return FALLBACK;

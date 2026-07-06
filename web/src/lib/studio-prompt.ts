@@ -15,6 +15,10 @@ import {
   type StudioChoices,
   type StudioStyleId,
 } from "@/lib/studio-options";
+import {
+  assemblePhotoroomPrompt,
+  generateProductScenePlans,
+} from "@/lib/studio-scene-prompts";
 
 const BASE_SUFFIX =
   "photorealistic commercial packshot, product resting naturally on the surface with soft contact shadow at the base, sharp product focus, shallow depth of field, premium advertising quality";
@@ -64,7 +68,7 @@ function resolveLightingId(
   return lightingId;
 }
 
-function buildScenePrompt(
+function buildGenericScenePrompt(
   styleId: StudioStyleId,
   angleId: CameraAngleId,
   lightingId: LightingId,
@@ -95,6 +99,7 @@ function buildScenePrompt(
 
 export async function buildVariationPlans(
   choices: StudioChoices,
+  inputImageUrl?: string,
 ): Promise<VariationPlan[]> {
   const analysis = choices.analysis;
   const qualityId = choices.qualityId ?? "standard";
@@ -102,6 +107,7 @@ export async function buildVariationPlans(
   const angleId = resolveAngleId(choices.angleId, analysis);
   const baseLighting = resolveLightingId(choices.lightingId, analysis);
   const productSummary = analysis?.summary;
+  const styleLabel = STUDIO_STYLES[primaryStyle].label;
 
   const moods: Array<keyof typeof MOOD_MODIFIERS> = [
     "classic",
@@ -110,7 +116,6 @@ export async function buildVariationPlans(
   ];
   const labels: Array<"A" | "B" | "C"> = ["A", "B", "C"];
   const quality = QUALITY_PRESETS[qualityId];
-  const styleLabel = STUDIO_STYLES[primaryStyle].label;
 
   const lightingCycle: LightingId[] = [
     baseLighting,
@@ -130,6 +135,43 @@ export async function buildVariationPlans(
     }));
   }
 
+  // AI vision: product-specific realistic scenes from the actual photo
+  if (inputImageUrl && analysis) {
+    const scenePlans = await generateProductScenePlans(
+      inputImageUrl,
+      analysis,
+      choices.styleId,
+    );
+
+    return labels.map((label, i) => {
+      const plan = scenePlans[i];
+      const light = lightingCycle[i];
+      const padding =
+        i === 0
+          ? quality.padding
+          : i === 1
+            ? Math.max(0.1, quality.padding - 0.01)
+            : Math.min(0.14, quality.padding + 0.01);
+
+      return {
+        label,
+        styleId: primaryStyle,
+        styleLabel: `${styleLabel} — ${plan.label}`,
+        backgroundPrompt: assemblePhotoroomPrompt(
+          plan.sceneCore,
+          plan.mood,
+          angleId,
+          light,
+          qualityId,
+          productSummary,
+        ),
+        padding,
+        mood: plan.mood,
+      };
+    });
+  }
+
+  // Fallback without image/analysis
   return labels.map((label, i) => {
     const light = lightingCycle[i];
     const padding =
@@ -143,7 +185,7 @@ export async function buildVariationPlans(
       label,
       styleId: primaryStyle,
       styleLabel: `${styleLabel} — ${LIGHTING_PRESETS[light].label}`,
-      backgroundPrompt: buildScenePrompt(
+      backgroundPrompt: buildGenericScenePrompt(
         primaryStyle,
         angleId,
         light,

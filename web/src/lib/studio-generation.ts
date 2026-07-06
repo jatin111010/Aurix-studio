@@ -63,7 +63,7 @@ export async function buildStudioVariationsProgressive(
     };
   }
 
-  const plans = await buildVariationPlans(choices);
+  const plans = await buildVariationPlans(choices, inputImageUrl);
   const qualityId = choices.qualityId ?? "standard";
   const enhancements = photoroomEnhancements(qualityId);
   const seedBase = stableSeedFromText(`${inputImageUrl}|${choices.styleId}|${qualityId}`);

@@ -117,9 +117,9 @@ const COPY = {
     hinglish: "Almost ready! Image quality pick karo — phir 3 variations banaungi.",
   },
   studio_variations_done: {
-    en: "Here are 3 looks in your chosen style — different lighting moods. Pick your favourite, or try the options below.",
-    hi: "ये रहीं आपके चुने style में 3 looks — अलग lighting moods। पसंदीदा चुनें, या नीचे options देखें।",
-    hinglish: "Yeh rahe 3 looks aapke chosen style mein — alag lighting moods. Favourite pick karo, ya neeche options dekho.",
+    en: "Here are 3 realistic scenes tailored to your product — pick your favourite, or try the options below.",
+    hi: "ये रहे आपके product के लिए 3 realistic scenes — पसंदीदा चुनें, या नीचे options देखें।",
+    hinglish: "Yeh rahe aapke product ke liye 3 realistic scenes — favourite pick karo, ya neeche options dekho.",
   },
   studio_post_actions: {
     en: "What would you like to do next?",
@@ -160,9 +160,9 @@ const COPY = {
       "Jo scene dimaag mein hai, ek short line mein bata do.\n\nJaise: *wooden kitchen counter* ya *soft blue minimalist backdrop*",
   },
   studio_generating: {
-    en: "Perfect — creating 3 variations in your chosen style (soft, bright & luxury lighting). Images arrive one by one ⏳",
-    hi: "बढ़िया — आपके चुने style में 3 variations बना रही हूँ (soft, bright और luxury lighting)। Images एक-एक करके आएंगी ⏳",
-    hinglish: "Perfect — aapke chosen style mein 3 variations bana rahi hoon (soft, bright aur luxury lighting). Images ek-ek karke aayengi ⏳",
+    en: "Perfect — designing 3 realistic backgrounds matched to your product. Images arrive one by one ⏳",
+    hi: "बढ़िया — आपके product के हिसाब से 3 realistic backgrounds बना रही हूँ। Images एक-एक करके आएंगी ⏳",
+    hinglish: "Perfect — aapke product ke hisaab se 3 realistic backgrounds bana rahi hoon. Images ek-ek karke aayengi ⏳",
   },
   diecut_generating: {
     en: "On it — creating your die-cut (transparent PNG). About 10–20 seconds ⏳",

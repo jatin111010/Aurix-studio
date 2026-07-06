@@ -57,13 +57,23 @@ function langOf(choices: Record<string, unknown>): VeloraLang {
 
 function analysisIntro(analysis: ProductAnalysis, lang: VeloraLang): string {
   const summary = analysis.summary;
+  const setting = analysis.idealSetting;
   if (lang === "hi") {
-    return `मैंने आपका product देख लिया।\n\nयह *${summary}* जैसा लगता है।\n\nइस तरह के products के लिए ये studio styles सबसे अच्छे रहते हैं —`;
+    const settingLine = setting
+      ? `\n\nसबसे natural look के लिए *${setting}* जैसी setting suggest करूँगी।`
+      : "";
+    return `मैंने आपका product देख लिया।\n\nयह *${summary}* जैसा लगता है।${settingLine}\n\nइस तरह के products के लिए ये studio styles सबसे अच्छे रहते हैं —`;
   }
   if (lang === "hinglish") {
-    return `Maine aapka product dekh liya.\n\nYeh *${summary}* jaisa lagta hai.\n\nIs type ke products ke liye yeh studio styles best perform karte hain —`;
+    const settingLine = setting
+      ? `\n\nSabse natural look ke liye *${setting}* jaisi setting suggest karungi.`
+      : "";
+    return `Maine aapka product dekh liya.\n\nYeh *${summary}* jaisa lagta hai.${settingLine}\n\nIs type ke products ke liye yeh studio styles best perform karte hain —`;
   }
-  return `I've looked at your product.\n\nIt looks like *${summary}*.\n\nFor products like this, these studio styles usually work best —`;
+  const settingLine = setting
+    ? `\n\nFor the most natural look I'll suggest scenes like *${setting}*.`
+    : "";
+  return `I've looked at your product.\n\nIt looks like *${summary}*.${settingLine}\n\nFor products like this, these studio styles usually work best —`;
 }
 
 function defaultChoices(
