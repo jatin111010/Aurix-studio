@@ -16,6 +16,13 @@ import {
   getStyleLabel,
   type AdChoices,
 } from "@/lib/ad-options";
+import {
+  adStepIntro,
+  DEFAULT_LANG,
+  isVeloraLang,
+  say,
+  type VeloraLang,
+} from "@/lib/velora-voice";
 import { sendButtons, sendList, sendText } from "@/lib/whatsapp";
 
 const TOTAL_STEPS = 8;
@@ -24,27 +31,29 @@ export function getAdChoices(choices: Record<string, unknown>): AdChoices {
   return { mode: "ad", ...choices } as AdChoices;
 }
 
-function stepLabel(n: number, text: string): string {
-  return `Step ${n}/${TOTAL_STEPS} — ${text}`;
+function langOf(choices: AdChoices | Record<string, unknown>): VeloraLang {
+  return isVeloraLang(choices.lang) ? choices.lang : DEFAULT_LANG;
+}
+
+function stepLine(lang: VeloraLang, n: number, question: string): string {
+  return `${adStepIntro(lang, n, TOTAL_STEPS)}${question}`;
 }
 
 export async function startAdInterview(
   to: string,
   conversationId: string,
+  lang: VeloraLang = DEFAULT_LANG,
 ): Promise<void> {
   await updateConversation(conversationId, {
     step: "ad_awaiting_style",
-    choices: { mode: "ad" },
+    choices: { mode: "ad", lang },
   });
 
-  await sendText(
-    to,
-    "Let's design your ad post together. I'll ask what to *show* and *how* — just tap your choices below.",
-  );
+  await sendText(to, say(lang, "ad_start"));
 
   await sendList(
     to,
-    stepLabel(1, "What *look & presence* do you want?"),
+    stepLine(lang, 1, say(lang, "ad_style")),
     "Choose style",
     AD_STYLES.map((s) => ({
       id: `ad_style_${s.id}`,
@@ -59,6 +68,7 @@ export async function askAdPurpose(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_purpose",
     choices,
@@ -66,7 +76,7 @@ export async function askAdPurpose(
 
   await sendList(
     to,
-    stepLabel(2, "What is this ad *about*?"),
+    stepLine(lang, 2, say(lang, "ad_purpose")),
     "Choose purpose",
     AD_PURPOSES.map((p) => ({
       id: `ad_purpose_${p.id}`,
@@ -81,6 +91,7 @@ export async function askAdOffer(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_offer",
     choices,
@@ -88,7 +99,7 @@ export async function askAdOffer(
 
   await sendList(
     to,
-    stepLabel(3, "What *offer* should appear on the image?"),
+    stepLine(lang, 3, say(lang, "ad_offer")),
     "Choose offer",
     AD_OFFERS.map((o) => ({
       id: `ad_offer_${o.id}`,
@@ -103,6 +114,7 @@ export async function askAdCta(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_cta",
     choices,
@@ -110,7 +122,7 @@ export async function askAdCta(
 
   await sendList(
     to,
-    stepLabel(4, "How should customers *take action*? (button text)"),
+    stepLine(lang, 4, say(lang, "ad_cta")),
     "Choose CTA",
     AD_CTAS.map((c) => ({
       id: `ad_cta_${c.id}`,
@@ -125,14 +137,15 @@ export async function askAdHeadlineMode(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_headline_mode",
     choices,
   });
 
-  await sendButtons(to, stepLabel(5, "How should we write the *headline*?"), [
-    { id: "ad_headline_ai", title: "AI writes it" },
-    { id: "ad_headline_custom", title: "I'll type my own" },
+  await sendButtons(to, stepLine(lang, 5, say(lang, "ad_headline_mode")), [
+    { id: "ad_headline_ai", title: "You write it" },
+    { id: "ad_headline_custom", title: "I'll type mine" },
   ]);
 }
 
@@ -141,15 +154,13 @@ export async function askAdHeadlineText(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_headline_text",
     choices: { ...choices, headlineMode: "custom" },
   });
 
-  await sendText(
-    to,
-    "Type your *headline* (one short line, max ~10 words).\n\nExample: *Premium Kaju — Farm Fresh Quality*",
-  );
+  await sendText(to, say(lang, "ad_headline_text"));
 }
 
 export async function askAdMessageMode(
@@ -157,20 +168,17 @@ export async function askAdMessageMode(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_message_mode",
     choices,
   });
 
-  await sendButtons(
-    to,
-    stepLabel(6, "What *message* should we share under the headline?"),
-    [
-      { id: "ad_message_ai", title: "AI writes it" },
-      { id: "ad_message_custom", title: "I'll type my own" },
-      { id: "ad_message_short", title: "Keep it minimal" },
-    ],
-  );
+  await sendButtons(to, stepLine(lang, 6, say(lang, "ad_message_mode")), [
+    { id: "ad_message_ai", title: "You write it" },
+    { id: "ad_message_custom", title: "I'll type mine" },
+    { id: "ad_message_short", title: "Keep it short" },
+  ]);
 }
 
 export async function askAdMessageText(
@@ -178,15 +186,13 @@ export async function askAdMessageText(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_message_text",
     choices: { ...choices, messageMode: "custom" },
   });
 
-  await sendText(
-    to,
-    "Type the *key message* you want customers to read (one line).\n\nExample: *Order today — free delivery in your city*",
-  );
+  await sendText(to, say(lang, "ad_message_text"));
 }
 
 export async function askAdBackground(
@@ -194,6 +200,7 @@ export async function askAdBackground(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_background",
     choices,
@@ -201,30 +208,37 @@ export async function askAdBackground(
 
   await sendList(
     to,
-    stepLabel(7, "Pick a *product background* for the photo in your ad:"),
+    stepLine(lang, 7, say(lang, "ad_background")),
     "Choose background",
     backgroundListRows(),
   );
 }
 
-function describeHeadline(choices: AdChoices): string {
+function describeHeadline(choices: AdChoices, lang: VeloraLang): string {
   if (choices.headlineMode === "custom" && choices.headline) {
     return choices.headline;
   }
-  return "AI will write from your choices";
+  if (lang === "hi") return "मैं आपके choices से लिखूँगी";
+  if (lang === "hinglish") return "Main aapke choices se likhungi";
+  return "I'll write from your choices";
 }
 
-function describeMessage(choices: AdChoices): string {
+function describeMessage(choices: AdChoices, lang: VeloraLang): string {
   if (choices.messageMode === "custom" && choices.subheadline) {
     return choices.subheadline;
   }
   if (choices.messageMode === "short") {
-    return "Short tagline only";
+    if (lang === "hi") return "छोटा tagline";
+    if (lang === "hinglish") return "Short tagline";
+    return "Short tagline";
   }
-  return "AI will write from your choices";
+  if (lang === "hi") return "मैं आपके choices से लिखूँगी";
+  if (lang === "hinglish") return "Main aapke choices se likhungi";
+  return "I'll write from your choices";
 }
 
 export function formatAdSummary(choices: AdChoices): string {
+  const lang = langOf(choices);
   const badge = getOfferBadge(choices.offerId);
   const bg = getBackgroundDisplayLabel(
     choices.backgroundId,
@@ -232,15 +246,15 @@ export function formatAdSummary(choices: AdChoices): string {
   );
 
   return [
-    "*Your ad — review before we create it:*",
+    say(lang, "ad_summary_title"),
     "",
     `• Look: ${getStyleLabel(choices.templateId)}`,
     `• About: ${getPurposeLabel(choices.purposeId)}`,
-    `• Offer on image: ${badge || "None"}`,
+    `• Offer: ${badge || (lang === "hi" ? "कोई नहीं" : lang === "hinglish" ? "Koi nahi" : "None")}`,
     `• Button: ${getCtaText(choices.ctaId)}`,
-    `• Headline: ${describeHeadline(choices)}`,
-    `• Message: ${describeMessage(choices)}`,
-    `• Product background: ${bg}`,
+    `• Headline: ${describeHeadline(choices, lang)}`,
+    `• Message: ${describeMessage(choices, lang)}`,
+    `• Background: ${bg}`,
   ].join("\n");
 }
 
@@ -249,14 +263,15 @@ export async function askAdConfirm(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_confirm",
     choices,
   });
 
   await sendText(to, formatAdSummary(choices));
-  await sendButtons(to, stepLabel(8, "Ready to create your ad?"), [
-    { id: "ad_confirm_generate", title: "Generate ad" },
+  await sendButtons(to, stepLine(lang, 8, say(lang, "ad_confirm")), [
+    { id: "ad_confirm_generate", title: "Create ad" },
     { id: "ad_confirm_restart", title: "Start over" },
   ]);
 }
@@ -266,15 +281,13 @@ export async function askAdCustomBackground(
   conversationId: string,
   choices: AdChoices,
 ): Promise<void> {
+  const lang = langOf(choices);
   await updateConversation(conversationId, {
     step: "ad_awaiting_custom_background",
     choices: { ...choices, backgroundId: "custom" },
   });
 
-  await sendText(
-    to,
-    "Describe the *product background scene* you want in the ad.\n\nExamples:\n• *Rustic wooden kitchen counter*\n• *Soft blue gradient minimalist backdrop*\n• *Diwali marigold flowers and diyas*",
-  );
+  await sendText(to, say(lang, "ad_custom_background"));
 }
 
 export async function handleAdCustomBackgroundText(
@@ -283,16 +296,14 @@ export async function handleAdCustomBackgroundText(
   text: string,
   choices: Record<string, unknown>,
 ): Promise<void> {
+  const ad = getAdChoices(choices);
+  const lang = langOf(ad);
   const prompt = sanitizeCustomBackgroundPrompt(text);
   if (!prompt) {
-    await sendText(
-      to,
-      "Please describe the scene in a few words (at least 5 characters).",
-    );
+    await sendText(to, say(lang, "err_scene_short"));
     return;
   }
 
-  const ad = getAdChoices(choices);
   await askAdConfirm(to, conversationId, {
     ...ad,
     backgroundId: "custom",
@@ -395,7 +406,7 @@ export async function handleAdReply(
   }
 
   if (replyId === "ad_confirm_restart") {
-    await startAdInterview(to, conversationId);
+    await startAdInterview(to, conversationId, langOf(ad));
     return true;
   }
 
@@ -408,13 +419,14 @@ export async function handleAdHeadlineText(
   text: string,
   choices: Record<string, unknown>,
 ): Promise<void> {
+  const ad = getAdChoices(choices);
+  const lang = langOf(ad);
   const headline = text.trim().slice(0, 80);
   if (headline.length < 3) {
-    await sendText(to, "Please send a slightly longer headline (at least 3 characters).");
+    await sendText(to, say(lang, "err_headline_short"));
     return;
   }
 
-  const ad = getAdChoices(choices);
   await askAdMessageMode(to, conversationId, {
     ...ad,
     headlineMode: "custom",
@@ -428,13 +440,14 @@ export async function handleAdMessageText(
   text: string,
   choices: Record<string, unknown>,
 ): Promise<void> {
+  const ad = getAdChoices(choices);
+  const lang = langOf(ad);
   const subheadline = text.trim().slice(0, 120);
   if (subheadline.length < 3) {
-    await sendText(to, "Please send a slightly longer message (at least 3 characters).");
+    await sendText(to, say(lang, "err_message_short"));
     return;
   }
 
-  const ad = getAdChoices(choices);
   await askAdBackground(to, conversationId, {
     ...ad,
     messageMode: "custom",

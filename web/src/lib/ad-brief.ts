@@ -5,6 +5,7 @@ import {
   getPurposeLabel,
   type AdChoices,
 } from "@/lib/ad-options";
+import { DEFAULT_LANG, isVeloraLang } from "@/lib/velora-voice";
 import {
   generateAdCopyFromBrief,
   type AdCopyContent,
@@ -47,6 +48,7 @@ export async function resolveAdBrief(choices: AdChoices): Promise<AdBrief> {
       style: templateId,
       badge: showBadge ? badge : "",
       cta,
+      lang: isVeloraLang(choices.lang) ? choices.lang : DEFAULT_LANG,
     });
     if (!headline || choices.headlineMode === "ai") {
       headline = generated.headline;

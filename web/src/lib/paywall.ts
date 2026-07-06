@@ -3,6 +3,7 @@ import {
   createSubscriptionPaymentLink,
   isRazorpayConfigured,
 } from "@/lib/razorpay";
+import { DEFAULT_LANG, say, type VeloraLang } from "@/lib/velora-voice";
 import { sendButtons, sendList, sendText } from "@/lib/whatsapp";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -68,7 +69,10 @@ function planListRows() {
   });
 }
 
-export async function sendPlansMenu(to: string): Promise<void> {
+export async function sendPlansMenu(
+  to: string,
+  lang: VeloraLang = DEFAULT_LANG,
+): Promise<void> {
   const lines = (Object.keys(PLANS) as PlanId[])
     .map((id) => {
       const p = PLANS[id];
@@ -76,35 +80,45 @@ export async function sendPlansMenu(to: string): Promise<void> {
     })
     .join("\n");
 
+  const intro =
+    lang === "hi"
+      ? "Velora Studio plans — monthly subscription:\n\n"
+      : lang === "hinglish"
+        ? "Velora Studio plans — monthly subscription:\n\n"
+        : "Here are our Velora Studio plans:\n\n";
+
   await sendText(
     to,
-    `Velora Studio plans:\n\n${lines}\n\nTap a plan below to get your Razorpay payment link.`,
+    `${intro}${lines}\n\nTap a plan below — payment link aapko yahin milega.`,
   );
 
-  await sendList(to, "Monthly subscription:", "Choose plan", planListRows());
+  await sendList(to, "Choose plan:", "Plans", planListRows());
 }
 
 export async function sendPaywallMessage(
   to: string,
   userId: string,
+  lang: VeloraLang = DEFAULT_LANG,
 ): Promise<void> {
-  await sendText(
-    to,
-    "You've used your free studio images. Subscribe to keep creating:",
-  );
-  await sendPlansMenu(to);
+  await sendText(to, say(lang, "paywall_studio"));
+  await sendPlansMenu(to, lang);
 }
 
 export async function sendAdPaywallMessage(
   to: string,
   userId: string,
+  lang: VeloraLang = DEFAULT_LANG,
 ): Promise<void> {
-  await sendText(
-    to,
-    "Social media *ad posts* need ad credits (subscription). Your free trial covers *studio shots* only.\n\nSubscribe for ad posts, or continue with a studio shot.",
-  );
+  await sendText(to, say(lang, "paywall_ad"));
 
-  await sendButtons(to, "What would you like?", [
+  const prompt =
+    lang === "hi"
+      ? "Aap kya karna chahenge?"
+      : lang === "hinglish"
+        ? "Aap kya karna chahenge?"
+        : "What would you like?";
+
+  await sendButtons(to, prompt, [
     { id: "mode_studio", title: "Studio shot" },
     { id: "plans_menu", title: "View plans" },
   ]);

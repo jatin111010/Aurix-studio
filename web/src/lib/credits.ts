@@ -1,6 +1,8 @@
 import { PLANS, type PlanId } from "@/lib/config";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getUserQuota, formatQuotaMessage } from "@/lib/paywall";
+import { getUserLanguage } from "@/lib/user-prefs";
+import { DEFAULT_LANG, say } from "@/lib/velora-voice";
 import { sendText } from "@/lib/whatsapp";
 
 export async function grantPlanCredits(
@@ -77,9 +79,15 @@ export async function notifyPlanActivated(
 
   const plan = PLANS[planId];
   const quota = await getUserQuota(userId);
+  const lang = (await getUserLanguage(userId)) ?? DEFAULT_LANG;
 
   await sendText(
     user.phone as string,
-    `Payment successful!\n\nYour ${plan.name} plan is active.\n+${plan.studioCredits} studio · +${plan.adCredits} ad credits added.\n\n${formatQuotaMessage(quota)}\n\nSend a product photo to create your next image.`,
+    say(lang, "payment_success", {
+      plan: plan.name,
+      studio: plan.studioCredits,
+      ad: plan.adCredits,
+      quota: formatQuotaMessage(quota),
+    }),
   );
 }

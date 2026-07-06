@@ -40,7 +40,15 @@ import {
   sendPlansMenu,
 } from "@/lib/paywall";
 import { uploadInputImage, uploadOutputPng } from "@/lib/storage";
+import { getUserLanguage, resolveLanguage, setUserLanguage } from "@/lib/user-prefs";
 import { canGenerate, getOrCreateUserByPhone } from "@/lib/users";
+import {
+  DEFAULT_LANG,
+  detectLanguage,
+  isVeloraLang,
+  say,
+  type VeloraLang,
+} from "@/lib/velora-voice";
 import {
   downloadMedia,
   mimeToExt,
@@ -102,6 +110,17 @@ function parseModeId(replyId: string): GenerationMode | null {
   return null;
 }
 
+function parseLangId(replyId: string): VeloraLang | null {
+  if (replyId === "lang_en") return "en";
+  if (replyId === "lang_hi") return "hi";
+  if (replyId === "lang_hinglish") return "hinglish";
+  return null;
+}
+
+function langFromChoices(choices: Record<string, unknown>): VeloraLang {
+  return isVeloraLang(choices.lang) ? choices.lang : DEFAULT_LANG;
+}
+
 function getReplyId(message: WhatsAppMessage): string | null {
   return (
     message.interactive?.button_reply?.id ??
@@ -110,13 +129,17 @@ function getReplyId(message: WhatsAppMessage): string | null {
   );
 }
 
-async function sendWelcome(to: string, userId: string): Promise<void> {
+async function sendWelcome(
+  to: string,
+  userId: string,
+  lang: VeloraLang = DEFAULT_LANG,
+): Promise<void> {
   const quota = await getUserQuota(userId);
 
   if (quota.studioBalance > 0 || quota.adBalance > 0) {
     await sendText(
       to,
-      `Welcome back to Velora Studio!\n\n${formatQuotaMessage(quota)}\n\nSend a product photo to create your next image.`,
+      say(lang, "welcome_back", { quota: formatQuotaMessage(quota) }),
     );
     return;
   }
@@ -124,35 +147,67 @@ async function sendWelcome(to: string, userId: string): Promise<void> {
   if (quota.freeRemaining > 0) {
     await sendText(
       to,
-      `Welcome to Velora Studio!\n\nSend a product photo and we'll create a professional studio shot.\n\n${formatQuotaMessage(quota)}\n\nAd posts unlock with a subscription.`,
+      say(lang, "welcome_new", { quota: formatQuotaMessage(quota) }),
     );
     return;
   }
 
   await sendText(
     to,
-    `Welcome to Velora Studio!\n\n${formatQuotaMessage(quota)}\n\nType *plans* to subscribe.`,
+    say(lang, "welcome_paywall", { quota: formatQuotaMessage(quota) }),
   );
 }
 
-async function askMode(to: string): Promise<void> {
-  await sendButtons(to, "What do you need?", [
+async function askLanguage(
+  to: string,
+  conversationId: string,
+  inputUrl: string,
+): Promise<void> {
+  await updateConversation(conversationId, {
+    step: "awaiting_language",
+    input_image_url: inputUrl,
+    choices: {},
+  });
+
+  await sendText(to, say(DEFAULT_LANG, "ask_language"));
+  await sendButtons(to, "Language / भाषा", [
+    { id: "lang_hinglish", title: "Hinglish" },
+    { id: "lang_hi", title: "हिंदी" },
+    { id: "lang_en", title: "English" },
+  ]);
+}
+
+async function continueAfterPhoto(
+  to: string,
+  conversationId: string,
+  lang: VeloraLang,
+): Promise<void> {
+  await updateConversation(conversationId, {
+    step: "awaiting_mode",
+    choices: { lang },
+  });
+  await sendText(to, say(lang, "photo_received"));
+  await askMode(to, lang);
+}
+
+async function askMode(to: string, lang: VeloraLang): Promise<void> {
+  await sendButtons(to, say(lang, "ask_mode"), [
     { id: "mode_studio", title: "Studio shot" },
     { id: "mode_ad", title: "Social ad post" },
   ]);
 }
 
-async function askStudioStyle(to: string): Promise<void> {
-  await sendButtons(to, "What kind of *studio photo* do you want?", [
+async function askStudioStyle(to: string, lang: VeloraLang): Promise<void> {
+  await sendButtons(to, say(lang, "ask_studio_style"), [
     { id: "studio_style_scene", title: "With background" },
     { id: "studio_style_diecut", title: "Die-cut PNG" },
   ]);
 }
 
-async function askStudioBackground(to: string): Promise<void> {
+async function askStudioBackground(to: string, lang: VeloraLang): Promise<void> {
   await sendList(
     to,
-    "Pick a background for your *studio shot* (clean product photo, no text):",
+    say(lang, "ask_studio_background"),
     "Choose background",
     backgroundListRows(),
   );
@@ -161,16 +216,19 @@ async function askStudioBackground(to: string): Promise<void> {
 async function askStudioCustomBackground(
   to: string,
   conversationId: string,
+  lang: VeloraLang,
 ): Promise<void> {
   await updateConversation(conversationId, {
     step: "awaiting_custom_background",
-    choices: { mode: "studio", studioStyle: "scene", backgroundId: BACKGROUND_CUSTOM_ID },
+    choices: {
+      mode: "studio",
+      studioStyle: "scene",
+      backgroundId: BACKGROUND_CUSTOM_ID,
+      lang,
+    },
   });
 
-  await sendText(
-    to,
-    "Describe the *background scene* you want.\n\nExamples:\n• *Rustic wooden kitchen counter*\n• *Soft blue gradient minimalist backdrop*\n• *Diwali marigold flowers and diyas*",
-  );
+  await sendText(to, say(lang, "ask_custom_background"));
 }
 
 async function handleImage(
@@ -179,9 +237,10 @@ async function handleImage(
   conversationId: string,
   mediaId: string,
 ): Promise<void> {
+  const lang = await resolveLanguage(userId, {});
   const studioCheck = await canGenerate(userId, "studio");
   if (!studioCheck.ok) {
-    await sendPaywallMessage(to, userId);
+    await sendPaywallMessage(to, userId, lang);
     return;
   }
 
@@ -189,13 +248,17 @@ async function handleImage(
   const ext = mimeToExt(mimeType);
   const inputUrl = await uploadInputImage(userId, buffer, mimeType, ext);
 
-  await updateConversation(conversationId, {
-    step: "awaiting_mode",
-    input_image_url: inputUrl,
-    choices: {},
-  });
+  const userLang = await getUserLanguage(userId);
 
-  await askMode(to);
+  if (userLang) {
+    await updateConversation(conversationId, {
+      input_image_url: inputUrl,
+    });
+    await continueAfterPhoto(to, conversationId, userLang);
+    return;
+  }
+
+  await askLanguage(to, conversationId, inputUrl);
 }
 
 async function handleModeChoice(
@@ -203,33 +266,40 @@ async function handleModeChoice(
   userId: string,
   conversationId: string,
   mode: GenerationMode,
+  lang: VeloraLang,
 ): Promise<void> {
   if (mode === "ad") {
     const adCheck = await canGenerate(userId, "ad");
     if (!adCheck.ok) {
-      await sendAdPaywallMessage(to, userId);
+      await sendAdPaywallMessage(to, userId, lang);
       return;
     }
-    await startAdInterview(to, conversationId);
+    await startAdInterview(to, conversationId, lang);
     return;
   }
 
   const studioCheck = await canGenerate(userId, "studio");
   if (!studioCheck.ok) {
-    await sendPaywallMessage(to, userId);
+    await sendPaywallMessage(to, userId, lang);
     return;
   }
 
   await updateConversation(conversationId, {
     step: "awaiting_studio_style",
-    choices: { mode: "studio" },
+    choices: { mode: "studio", lang },
   });
 
-  await sendText(
-    to,
-    "Studio shot — choose how you want the product to look.",
-  );
-  await askStudioStyle(to);
+  await askStudioStyle(to, lang);
+}
+
+async function handleLanguageChoice(
+  to: string,
+  userId: string,
+  conversationId: string,
+  lang: VeloraLang,
+): Promise<void> {
+  await setUserLanguage(userId, lang);
+  await continueAfterPhoto(to, conversationId, lang);
 }
 
 async function handleStudioDiecut(
@@ -237,16 +307,14 @@ async function handleStudioDiecut(
   userId: string,
   conversationId: string,
   inputImageUrl: string,
+  lang: VeloraLang,
 ): Promise<void> {
   await updateConversation(conversationId, {
     step: "generating",
-    choices: { mode: "studio", studioStyle: "diecut" },
+    choices: { mode: "studio", studioStyle: "diecut", lang },
   });
 
-  await sendText(
-    to,
-    "Creating your *die-cut* product image (transparent PNG)… ~10–20 seconds.",
-  );
+  await sendText(to, say(lang, "diecut_generating"));
 
   try {
     const credit = await checkStudioCredit(userId);
@@ -266,11 +334,12 @@ async function handleStudioDiecut(
     );
 
     await saveStudioGeneration(userId, inputImageUrl, outputUrl, built, credit);
-    await finishGeneration(to, userId, conversationId);
+    await finishGeneration(to, userId, conversationId, lang);
   } catch (error) {
     await handleGenerationError(to, userId, conversationId, error, {
       mode: "studio",
       studioStyle: "diecut",
+      lang,
     });
   }
 }
@@ -281,6 +350,7 @@ async function handleStudioBackground(
   conversationId: string,
   inputImageUrl: string,
   backgroundId: string,
+  lang: VeloraLang,
   customBackgroundPrompt?: string,
 ): Promise<void> {
   await updateConversation(conversationId, {
@@ -289,11 +359,12 @@ async function handleStudioBackground(
       mode: "studio",
       studioStyle: "scene",
       backgroundId,
+      lang,
       ...(customBackgroundPrompt ? { customBackgroundPrompt } : {}),
     },
   });
 
-  await sendText(to, "Creating your studio shot… ~15–30 seconds.");
+  await sendText(to, say(lang, "studio_generating"));
 
   try {
     const credit = await checkStudioCredit(userId);
@@ -317,13 +388,14 @@ async function handleStudioBackground(
     );
 
     await saveStudioGeneration(userId, inputImageUrl, outputUrl, built, credit);
-    await finishGeneration(to, userId, conversationId);
+    await finishGeneration(to, userId, conversationId, lang);
   } catch (error) {
     await handleGenerationError(to, userId, conversationId, error, {
       mode: "studio",
       studioStyle: "scene",
       backgroundId,
       customBackgroundPrompt,
+      lang,
     });
   }
 }
@@ -349,9 +421,15 @@ async function handleAdGenerate(
   choices: Record<string, unknown>,
 ): Promise<void> {
   const adChoices = getAdChoices(choices);
+  const lang = langFromChoices(adChoices);
   const backgroundId = adChoices.backgroundId;
   if (!backgroundId) {
-    await sendText(to, "Please pick a background first.");
+    await sendText(
+      to,
+      lang === "hi"
+        ? "Pehle background choose karein."
+        : "Please pick a background first.",
+    );
     return;
   }
 
@@ -360,7 +438,7 @@ async function handleAdGenerate(
     choices: adChoices,
   });
 
-  await sendText(to, "Designing your ad post from your choices… ~20–40 seconds.");
+  await sendText(to, say(lang, "ad_generating"));
 
   try {
     const credit = await checkAdCredit(userId);
@@ -385,7 +463,7 @@ async function handleAdGenerate(
     );
 
     await saveAdGeneration(userId, inputImageUrl, outputUrl, built, credit);
-    await finishGeneration(to, userId, conversationId);
+    await finishGeneration(to, userId, conversationId, lang);
   } catch (error) {
     await handleGenerationError(to, userId, conversationId, error, adChoices);
   }
@@ -395,6 +473,7 @@ async function finishGeneration(
   to: string,
   userId: string,
   conversationId: string,
+  lang: VeloraLang = DEFAULT_LANG,
 ): Promise<void> {
   await resetConversation(conversationId);
 
@@ -406,10 +485,10 @@ async function finishGeneration(
   if (canStudio || canAd) {
     await sendText(
       to,
-      `Done! Send another product photo anytime.\n\n${formatQuotaMessage(updatedQuota)}`,
+      say(lang, "done_more", { quota: formatQuotaMessage(updatedQuota) }),
     );
   } else {
-    await sendPaywallMessage(to, userId);
+    await sendPaywallMessage(to, userId, lang);
   }
 }
 
@@ -434,20 +513,17 @@ async function handleGenerationError(
   await updateConversation(conversationId, { step, choices });
 
   if (error instanceof AdPaywallError) {
-    await sendAdPaywallMessage(to, userId);
+    await sendAdPaywallMessage(to, userId, langFromChoices(choices));
     return;
   }
 
   if (error instanceof PaywallError) {
-    await sendPaywallMessage(to, userId);
+    await sendPaywallMessage(to, userId, langFromChoices(choices));
     return;
   }
 
   console.error("Generation failed", error);
-  await sendText(
-    to,
-    "Sorry, we couldn't deliver your image. No credit was used. Please try again — send your product photo once more.",
-  );
+  await sendText(to, say(langFromChoices(choices), "err_generation_failed"));
 }
 
 async function handleText(
@@ -459,7 +535,13 @@ async function handleText(
   choices: Record<string, unknown>,
   inputImageUrl: string | null,
 ): Promise<void> {
+  const lang = await resolveLanguage(userId, choices, body);
   const lower = body.trim().toLowerCase();
+
+  const detected = detectLanguage(body);
+  if (detected) {
+    await setUserLanguage(userId, detected);
+  }
 
   if (["balance", "credits", "quota", "status"].includes(lower)) {
     await sendText(to, formatQuotaMessage(await getUserQuota(userId)));
@@ -467,45 +549,52 @@ async function handleText(
   }
 
   if (["plans", "subscribe", "pricing", "plan", "pay"].includes(lower)) {
-    await sendPlansMenu(to);
+    await sendPlansMenu(to, lang);
     return;
   }
 
   if (
-    ["hi", "hello", "hey", "start", "help"].includes(lower) ||
+    ["hi", "hello", "hey", "start", "help", "namaste", "namaskar"].includes(
+      lower,
+    ) ||
     lower === "now"
   ) {
-    await sendWelcome(to, userId);
+    await sendWelcome(to, userId, lang);
     return;
   }
 
   if (step === "ad_awaiting_headline_text") {
-    await handleAdHeadlineText(to, conversationId, body, choices);
+    await handleAdHeadlineText(to, conversationId, body, { ...choices, lang });
     return;
   }
 
   if (step === "ad_awaiting_message_text") {
-    await handleAdMessageText(to, conversationId, body, choices);
+    await handleAdMessageText(to, conversationId, body, { ...choices, lang });
     return;
   }
 
   if (step === "ad_awaiting_custom_background") {
-    await handleAdCustomBackgroundText(to, conversationId, body, choices);
+    await handleAdCustomBackgroundText(to, conversationId, body, {
+      ...choices,
+      lang,
+    });
     return;
   }
 
   if (step === "awaiting_custom_background") {
     const prompt = sanitizeCustomBackgroundPrompt(body);
     if (!prompt) {
-      await sendText(
-        to,
-        "Please describe the scene in a few words (at least 5 characters).",
-      );
+      await sendText(to, say(lang, "err_scene_short"));
       return;
     }
 
     if (!inputImageUrl) {
-      await sendText(to, "Please send your product photo again to continue.");
+      await sendText(
+        to,
+        lang === "hi"
+          ? "Product photo dubara bhejiye."
+          : "Please send your product photo again.",
+      );
       return;
     }
 
@@ -515,18 +604,19 @@ async function handleText(
       conversationId,
       inputImageUrl,
       BACKGROUND_CUSTOM_ID,
+      lang,
       prompt,
     );
     return;
   }
 
   if (step === "ad_awaiting_confirm") {
-    await sendText(to, "Tap *Generate ad* or *Start over* using the buttons above.");
+    await sendText(to, say(lang, "err_pick_option"));
     return;
   }
 
   if (AD_STEPS.has(step)) {
-    await sendText(to, "Please pick an option from the list or buttons above.");
+    await sendText(to, say(lang, "err_pick_option"));
     return;
   }
 
@@ -536,51 +626,31 @@ async function handleText(
     lower === "???" ||
     lower.includes("image")
   ) {
-    await sendText(
-      to,
-      "If your image didn't arrive, send your product photo again.\n\nType *balance* to check credits.",
-    );
+    await sendText(to, say(lang, "hint_balance"));
     return;
   }
 
   if (step === "awaiting_studio_style") {
-    await sendText(
-      to,
-      "Please tap *With background* or *Die-cut PNG* above.",
-    );
+    await sendText(to, say(lang, "err_pick_option"));
     return;
   }
 
-  if (step === "awaiting_mode") {
-    await sendText(to, "Please tap *Studio shot* or *Social ad post* above.");
+  if (step === "awaiting_mode" || step === "awaiting_language") {
+    await sendText(to, say(lang, "err_pick_option"));
     return;
   }
 
-  if (step === "awaiting_background") {
-    await sendText(
-      to,
-      "Please pick a background from the list above, or send a new product photo.",
-    );
-    return;
-  }
-
-  if (step === "awaiting_custom_background") {
-    await sendText(
-      to,
-      "Type your background idea in a message, or send a new product photo to start over.",
-    );
+  if (step === "awaiting_background" || step === "awaiting_custom_background") {
+    await sendText(to, say(lang, "err_pick_option"));
     return;
   }
 
   if (step === "generating") {
-    await sendText(to, "Still working on your image — please wait a moment.");
+    await sendText(to, say(lang, "err_generating_wait"));
     return;
   }
 
-  await sendText(
-    to,
-    "Send a product photo to get started, or type *balance* / *plans*.",
-  );
+  await sendText(to, say(lang, "hint_balance"));
 }
 
 export async function processWhatsAppMessage(
@@ -613,10 +683,30 @@ export async function processWhatsAppMessage(
   const user = await getOrCreateUserByPhone(from);
   const conversation = await getOrCreateConversation(user.id);
   const replyId = getReplyId(message);
+  const lang = await resolveLanguage(
+    user.id,
+    conversation.choices,
+    message.text?.body,
+  );
 
   if (replyId) {
     if (replyId === "plans_menu") {
-      await sendPlansMenu(from);
+      await sendPlansMenu(from, lang);
+      return;
+    }
+
+    const langChoice = parseLangId(replyId);
+    if (
+      langChoice &&
+      conversation.step === "awaiting_language" &&
+      conversation.input_image_url
+    ) {
+      await handleLanguageChoice(
+        from,
+        user.id,
+        conversation.id,
+        langChoice,
+      );
       return;
     }
 
@@ -657,21 +747,23 @@ export async function processWhatsAppMessage(
       conversation.input_image_url &&
       conversation.step === "awaiting_studio_style"
     ) {
+      const flowLang = langFromChoices(conversation.choices);
       if (studioStyle === "diecut") {
         await handleStudioDiecut(
           from,
           user.id,
           conversation.id,
           conversation.input_image_url,
+          flowLang,
         );
         return;
       }
 
       await updateConversation(conversation.id, {
         step: "awaiting_background",
-        choices: { mode: "studio", studioStyle: "scene" },
+        choices: { mode: "studio", studioStyle: "scene", lang: flowLang },
       });
-      await askStudioBackground(from);
+      await askStudioBackground(from, flowLang);
       return;
     }
 
@@ -681,20 +773,27 @@ export async function processWhatsAppMessage(
       conversation.input_image_url &&
       conversation.step === "awaiting_mode"
     ) {
-      await handleModeChoice(from, user.id, conversation.id, mode);
+      await handleModeChoice(
+        from,
+        user.id,
+        conversation.id,
+        mode,
+        langFromChoices(conversation.choices),
+      );
       return;
     }
 
     const backgroundId = parseBackgroundId(replyId);
     if (backgroundId && conversation.input_image_url) {
+      const flowLang = langFromChoices(conversation.choices);
       if (conversation.step === "generating") {
-        await sendText(from, "Still working on your last image — please wait.");
+        await sendText(from, say(flowLang, "err_generating_wait"));
         return;
       }
 
       if (conversation.step === "awaiting_background") {
         if (backgroundId === BACKGROUND_CUSTOM_ID) {
-          await askStudioCustomBackground(from, conversation.id);
+          await askStudioCustomBackground(from, conversation.id, flowLang);
           return;
         }
 
@@ -704,6 +803,7 @@ export async function processWhatsAppMessage(
           conversation.id,
           conversation.input_image_url,
           backgroundId,
+          flowLang,
         );
         return;
       }

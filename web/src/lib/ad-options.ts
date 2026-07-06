@@ -1,3 +1,4 @@
+import type { VeloraLang } from "@/lib/velora-voice";
 import type { AdTemplateId } from "@/lib/ad-templates";
 
 export const AD_STYLES = [
@@ -58,6 +59,7 @@ export const AD_CTAS = [
 
 export type AdChoices = {
   mode: "ad";
+  lang?: VeloraLang;
   templateId?: AdTemplateId;
   purposeId?: string;
   offerId?: string;

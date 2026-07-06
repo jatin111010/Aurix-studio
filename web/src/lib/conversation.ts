@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export type ConversationStep =
   | "start"
   | "awaiting_mode"
+  | "awaiting_language"
   | "awaiting_studio_style"
   | "awaiting_background"
   | "awaiting_custom_background"
