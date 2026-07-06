@@ -13,9 +13,13 @@ import {
   startAdInterview,
 } from "@/lib/ad-whatsapp";
 import {
+  abortStuckGeneration,
   getOrCreateConversation,
+  isGenerationStale,
+  markGenerating,
   resetConversation,
   updateConversation,
+  type ConversationRow,
 } from "@/lib/conversation";
 import {
   AdPaywallError,
@@ -27,6 +31,7 @@ import {
 import {
   handleStudioReply,
   handleStudioText,
+  resumeStudioAfterStale,
   STUDIO_STEPS,
   startStudioExperience,
   studioGenerationErrorStep,
@@ -135,6 +140,61 @@ function getReplyId(message: WhatsAppMessage): string | null {
     message.interactive?.list_reply?.id ??
     null
   );
+}
+
+function isCancelMessage(body: string): boolean {
+  const lower = body.trim().toLowerCase();
+  return (
+    ["cancel", "reset", "restart", "stop", "abort", "quit", "exit"].includes(
+      lower,
+    ) ||
+    lower === "start over" ||
+    lower.includes("cancel karo") ||
+    lower.includes("start over")
+  );
+}
+
+async function recoverStaleGenerationIfNeeded(
+  to: string,
+  conversation: ConversationRow,
+): Promise<ConversationRow> {
+  if (!isGenerationStale(conversation)) return conversation;
+
+  const lang = langFromChoices(conversation.choices);
+  const step = await abortStuckGeneration(conversation.id, conversation.choices);
+  const cleaned = stripGeneratingMeta(conversation.choices);
+  await sendText(to, say(lang, "err_generation_timed_out"));
+
+  const resumed = await resumeStudioAfterStale(
+    to,
+    conversation.id,
+    step,
+    cleaned,
+  );
+  if (!resumed) {
+    if (step === "awaiting_mode" && conversation.input_image_url) {
+      await continueAfterPhoto(to, conversation.id, lang);
+    } else if (step === "ad_awaiting_confirm") {
+      await askAdConfirm(to, conversation.id, getAdChoices(cleaned));
+    }
+  }
+
+  return {
+    ...conversation,
+    step,
+    choices: cleaned,
+  };
+}
+
+function stripGeneratingMeta(
+  choices: Record<string, unknown>,
+): Record<string, unknown> {
+  const {
+    generatingStartedAt: _a,
+    preGeneratingStep: _b,
+    ...rest
+  } = choices;
+  return rest;
 }
 
 async function sendWelcome(
@@ -301,7 +361,7 @@ async function handleAdGenerate(
 
   await updateConversation(conversationId, {
     step: "generating",
-    choices: adChoices,
+    choices: markGenerating(adChoices, "ad_awaiting_confirm"),
   });
 
   await sendText(to, say(lang, "ad_generating"));
@@ -482,6 +542,14 @@ async function handleText(
   }
 
   if (step === "generating") {
+    if (isCancelMessage(body)) {
+      const stepAfter = await abortStuckGeneration(conversationId, choices);
+      await sendText(to, say(lang, "err_generation_cancelled"));
+      if (stepAfter === "awaiting_mode" && inputImageUrl) {
+        await continueAfterPhoto(to, conversationId, lang);
+      }
+      return;
+    }
     await sendText(to, say(lang, "err_generating_wait"));
     return;
   }
@@ -517,7 +585,10 @@ export async function processWhatsAppMessage(
   }
 
   const user = await getOrCreateUserByPhone(from);
-  const conversation = await getOrCreateConversation(user.id);
+  let conversation = await recoverStaleGenerationIfNeeded(
+    from,
+    await getOrCreateConversation(user.id),
+  );
   const replyId = getReplyId(message);
   const lang = await resolveLanguage(
     user.id,
@@ -637,7 +708,7 @@ export async function processWhatsAppMessage(
 
   if (message.type === "image" && message.image?.id) {
     if (conversation.step === "generating") {
-      await sendText(from, "Still working on your last image — please wait.");
+      await sendText(from, say(langFromChoices(conversation.choices), "err_generating_wait"));
       return;
     }
     await handleImage(from, user.id, conversation.id, message.image.id);

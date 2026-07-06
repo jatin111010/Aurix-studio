@@ -1,4 +1,5 @@
-import { updateConversation } from "@/lib/conversation";
+import { markGenerating, updateConversation } from "@/lib/conversation";
+import type { ConversationStep } from "@/lib/conversation";
 import {
   checkStudioCredit,
   PaywallError,
@@ -196,10 +197,11 @@ async function runStudioGeneration(
   conversationId: string,
   inputImageUrl: string,
   choices: StudioChoices,
+  preStep: ConversationStep = "studio_awaiting_quality",
 ): Promise<void> {
   await updateConversation(conversationId, {
     step: "generating",
-    choices,
+    choices: markGenerating(choices, preStep),
   });
 
   const lang = langOf(choices);
@@ -256,19 +258,15 @@ async function runStudioGeneration(
   }
 }
 
-async function finishStudioDelivery(
+async function sendStudioPostActions(
   to: string,
   conversationId: string,
-  built: BuiltStudioSet,
+  choices: StudioChoices,
   lang: VeloraLang,
 ): Promise<void> {
-  if (built.studioStyle !== "diecut") {
-    await sendText(to, say(lang, "studio_variations_done"));
-  }
-
   await updateConversation(conversationId, {
     step: "studio_awaiting_actions",
-    choices: built.choices,
+    choices,
   });
 
   await sendList(to, say(lang, "studio_post_actions"), "What next?", [
@@ -280,14 +278,77 @@ async function finishStudioDelivery(
   ]);
 }
 
+export async function resumeStudioAfterStale(
+  to: string,
+  conversationId: string,
+  step: ConversationStep,
+  choices: Record<string, unknown>,
+): Promise<boolean> {
+  const studio = getStudioChoices(choices);
+  const lang = langOf(studio);
+
+  if (step === "studio_awaiting_quality") {
+    await askStudioQuality(to, conversationId, studio);
+    return true;
+  }
+  if (step === "studio_awaiting_actions") {
+    await sendStudioPostActions(to, conversationId, studio, lang);
+    return true;
+  }
+  if (step === "studio_awaiting_style" && studio.analysis) {
+    await updateConversation(conversationId, {
+      step: "studio_awaiting_style",
+      choices: studio,
+    });
+    await sendText(to, analysisIntro(studio.analysis, lang));
+    await sendList(
+      to,
+      say(lang, "studio_pick_style"),
+      "Choose style",
+      styleListRows(studio.analysis.category, studio.analysis),
+    );
+    return true;
+  }
+  if (step === "studio_awaiting_angle") {
+    await askStudioAngle(to, conversationId, studio);
+    return true;
+  }
+  if (step === "studio_awaiting_lighting") {
+    await askStudioLighting(to, conversationId, studio);
+    return true;
+  }
+  return false;
+}
+
+async function finishStudioDelivery(
+  to: string,
+  conversationId: string,
+  built: BuiltStudioSet,
+  lang: VeloraLang,
+): Promise<void> {
+  if (built.studioStyle !== "diecut") {
+    await sendText(to, say(lang, "studio_variations_done"));
+  }
+
+  await sendStudioPostActions(to, conversationId, built.choices, lang);
+}
+
 export async function handleStudioGenerate(
   to: string,
   userId: string,
   conversationId: string,
   inputImageUrl: string,
   choices: StudioChoices,
+  preStep: ConversationStep = "studio_awaiting_quality",
 ): Promise<void> {
-  await runStudioGeneration(to, userId, conversationId, inputImageUrl, choices);
+  await runStudioGeneration(
+    to,
+    userId,
+    conversationId,
+    inputImageUrl,
+    choices,
+    preStep,
+  );
 }
 
 function parseStyleId(replyId: string): StudioStyleId | null {
@@ -427,7 +488,14 @@ export async function handleStudioReply(
   }
 
   if (replyId === "studio_regenerate" && studio.analysis) {
-    await handleStudioGenerate(to, userId, conversationId, inputImageUrl, studio);
+    await handleStudioGenerate(
+      to,
+      userId,
+      conversationId,
+      inputImageUrl,
+      studio,
+      "studio_awaiting_actions",
+    );
     return true;
   }
 
@@ -453,10 +521,17 @@ export async function handleStudioReply(
         : studio.qualityId === "hd"
           ? "ultra"
           : "ultra";
-    await handleStudioGenerate(to, userId, conversationId, inputImageUrl, {
-      ...studio,
-      qualityId: nextQuality,
-    });
+    await handleStudioGenerate(
+      to,
+      userId,
+      conversationId,
+      inputImageUrl,
+      {
+        ...studio,
+        qualityId: nextQuality,
+      },
+      "studio_awaiting_actions",
+    );
     return true;
   }
 

@@ -304,6 +304,17 @@ const COPY = {
     hi: "पिछली image अभी बन रही है — एक पल रुकिए ⏳",
     hinglish: "Pichli image abhi ban rahi hai — ek second ⏳",
   },
+  err_generation_timed_out: {
+    en: "That last attempt took too long and didn't finish. No credit was used. Tap your options again or send a fresh product photo.",
+    hi: "पिछली कोशिश में समय लग गया और पूरी नहीं हुई। कोई credit नहीं कटा। Option फिर चुनें या नई product photo भेजें।",
+    hinglish:
+      "Pichli try time zyada lagi aur complete nahi hui. Koi credit nahi kata. Option dubara chuno ya nayi product photo bhejo.",
+  },
+  err_generation_cancelled: {
+    en: "Okay — cancelled the last attempt. Send a product photo when you're ready.",
+    hi: "ठीक है — पिछली कोशिश रोक दी। जब चाहें product photo भेजें।",
+    hinglish: "Theek hai — pichli try cancel kar di. Jab ready ho, product photo bhej dena.",
+  },
   err_generation_failed: {
     en: "Sorry — that didn't work this time. No credit was used. Please send your product photo once more and we'll try again.",
     hi: "माफ़ कीजिए — इस बार नहीं बना। कोई credit नहीं कटा। Product photo फिर भेजें, फिर कोशिश करेंगे।",

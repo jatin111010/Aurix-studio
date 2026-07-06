@@ -79,3 +79,60 @@ export async function resetConversation(conversationId: string): Promise<void> {
     input_image_url: null,
   });
 }
+
+/** After this, a dead Vercel run is treated as failed and the user can retry. */
+export const GENERATING_STALE_MS = 90_000;
+
+export function isGenerationStale(conversation: ConversationRow): boolean {
+  if (conversation.step !== "generating") return false;
+  const started = conversation.choices.generatingStartedAt;
+  const anchor =
+    typeof started === "string"
+      ? new Date(started).getTime()
+      : new Date(conversation.updated_at).getTime();
+  return Date.now() - anchor > GENERATING_STALE_MS;
+}
+
+export function markGenerating(
+  choices: Record<string, unknown>,
+  preStep: ConversationStep,
+): Record<string, unknown> {
+  return {
+    ...choices,
+    generatingStartedAt: new Date().toISOString(),
+    preGeneratingStep: preStep,
+  };
+}
+
+export function recoveryStepAfterStale(
+  choices: Record<string, unknown>,
+): ConversationStep {
+  const pre = choices.preGeneratingStep;
+  if (typeof pre === "string" && pre !== "generating") {
+    return pre as ConversationStep;
+  }
+  if (choices.analysis || choices.mode === "studio") {
+    return "studio_awaiting_quality";
+  }
+  if (choices.backgroundId || choices.templateId) {
+    return "ad_awaiting_confirm";
+  }
+  if (choices.lang && choices.mode !== "ad") {
+    return "awaiting_mode";
+  }
+  return "start";
+}
+
+export async function abortStuckGeneration(
+  conversationId: string,
+  choices: Record<string, unknown>,
+): Promise<ConversationStep> {
+  const step = recoveryStepAfterStale(choices);
+  const {
+    generatingStartedAt: _a,
+    preGeneratingStep: _b,
+    ...rest
+  } = choices;
+  await updateConversation(conversationId, { step, choices: rest });
+  return step;
+}
