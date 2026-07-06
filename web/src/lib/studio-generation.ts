@@ -24,10 +24,11 @@ export type BuiltStudioSet = {
 function photoroomEnhancements(qualityId: StudioChoices["qualityId"]) {
   const q = qualityId ?? "standard";
   return {
-    // Cutout is already clean — beautify adds ~15–25s per image and often isn't needed.
-    beautifyMode: undefined as undefined,
-    lightingMode: "ai.preserve-hue-and-saturation" as const,
-    // Upscale is slow — only for Ultra HD to avoid Vercel timeouts.
+    // Let Photoroom relight the product to match the scene (avoids pasted look).
+    lightingMode: "ai.auto" as const,
+    shadowMode: "ai.soft" as const,
+    // Photoroom expands short prompts into richer scenes — better backgrounds.
+    expandPromptMode: "ai.auto" as const,
     upscaleMode: q === "ultra" ? ("ai.slow" as const) : undefined,
   };
 }
@@ -62,11 +63,6 @@ export async function buildStudioVariationsProgressive(
     };
   }
 
-  const cutoutPng = await diecutImage({
-    imageUrl: inputImageUrl,
-    padding: 0.02,
-  });
-
   const plans = await buildVariationPlans(choices);
   const qualityId = choices.qualityId ?? "standard";
   const enhancements = photoroomEnhancements(qualityId);
@@ -74,15 +70,14 @@ export async function buildStudioVariationsProgressive(
 
   const variations: StudioVariation[] = [];
 
-  // Sequential — avoids 3 heavy parallel Photoroom calls hitting the timeout.
+  // Use the original photo — Photoroom removes background, relights, shadows, and
+  // composites in one pass (much more natural than pre-cutout compositing).
   for (let idx = 0; idx < plans.length; idx += 1) {
     const plan = plans[idx];
     const png = await editImage({
-      imageFile: cutoutPng,
-      imageFileName: "product.png",
+      imageUrl: inputImageUrl,
       backgroundPrompt: plan.backgroundPrompt,
       backgroundSeed: seedBase + idx * 101,
-      expandPromptMode: "ai.never",
       ...enhancements,
       padding: plan.padding,
     });

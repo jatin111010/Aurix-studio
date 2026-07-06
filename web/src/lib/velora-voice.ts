@@ -117,9 +117,9 @@ const COPY = {
     hinglish: "Almost ready! Image quality pick karo — phir 3 variations banaungi.",
   },
   studio_variations_done: {
-    en: "Here are your 3 studio variations — pick your favourite, or try the options below.",
-    hi: "ये रहीं आपकी 3 studio variations — पसंदीदा चुनें, या नीचे options देखें।",
-    hinglish: "Yeh rahi aapki 3 studio variations — favourite pick karo, ya neeche options dekho.",
+    en: "Here are 3 looks in your chosen style — different lighting moods. Pick your favourite, or try the options below.",
+    hi: "ये रहीं आपके चुने style में 3 looks — अलग lighting moods। पसंदीदा चुनें, या नीचे options देखें।",
+    hinglish: "Yeh rahe 3 looks aapke chosen style mein — alag lighting moods. Favourite pick karo, ya neeche options dekho.",
   },
   studio_post_actions: {
     en: "What would you like to do next?",
@@ -160,9 +160,9 @@ const COPY = {
       "Jo scene dimaag mein hai, ek short line mein bata do.\n\nJaise: *wooden kitchen counter* ya *soft blue minimalist backdrop*",
   },
   studio_generating: {
-    en: "Perfect — creating 3 premium studio variations. Images will arrive one by one (about 1–2 min total) ⏳",
-    hi: "बढ़िया — 3 premium studio variations बना रही हूँ। Images एक-एक करके आएंगी (लगभग 1–2 मिनट) ⏳",
-    hinglish: "Perfect — 3 premium studio variations bana rahi hoon. Images ek-ek karke aayengi (1–2 min total) ⏳",
+    en: "Perfect — creating 3 variations in your chosen style (soft, bright & luxury lighting). Images arrive one by one ⏳",
+    hi: "बढ़िया — आपके चुने style में 3 variations बना रही हूँ (soft, bright और luxury lighting)। Images एक-एक करके आएंगी ⏳",
+    hinglish: "Perfect — aapke chosen style mein 3 variations bana rahi hoon (soft, bright aur luxury lighting). Images ek-ek karke aayengi ⏳",
   },
   diecut_generating: {
     en: "On it — creating your die-cut (transparent PNG). About 10–20 seconds ⏳",

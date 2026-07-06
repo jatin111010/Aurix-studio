@@ -4,7 +4,6 @@
 
 import { enhanceCustomBackgroundPrompt } from "@/lib/background-prompt";
 import type { ProductAnalysis } from "@/lib/studio-analysis";
-import { pickVariationStyleIds } from "@/lib/studio-recommendations";
 import {
   CAMERA_ANGLES,
   LIGHTING_PRESETS,
@@ -18,7 +17,13 @@ import {
 } from "@/lib/studio-options";
 
 const BASE_SUFFIX =
-  "professional product photography, sharp focus, clean composition, natural shadows, premium commercial quality";
+  "photorealistic commercial packshot, product resting naturally on the surface with soft contact shadow at the base, sharp product focus, shallow depth of field, premium advertising quality";
+
+const MOOD_MODIFIERS = {
+  classic: "balanced centered hero composition",
+  elevated: "slightly elevated camera angle, airy negative space",
+  dramatic: "rich contrast, cinematic depth, subtle vignette",
+} as const;
 
 export type VariationPlan = {
   label: "A" | "B" | "C";
@@ -65,14 +70,19 @@ function buildScenePrompt(
   lightingId: LightingId,
   qualityId: QualityId,
   moodModifier: string,
+  productSummary?: string,
 ): string {
   const style = STUDIO_STYLES[styleId];
   const angle = CAMERA_ANGLES[angleId];
   const lighting = LIGHTING_PRESETS[lightingId];
   const quality = QUALITY_PRESETS[qualityId];
 
+  const productLead = productSummary
+    ? `the product is ${productSummary}, `
+    : "";
+
   const parts = [
-    style.scenePrompt,
+    productLead + style.scenePrompt,
     moodModifier,
     angle.promptSuffix,
     lighting.promptSuffix,
@@ -83,12 +93,6 @@ function buildScenePrompt(
   return parts.join(", ");
 }
 
-const MOOD_MODIFIERS = {
-  classic: "balanced hero composition, centered product",
-  elevated: "slightly elevated perspective, airy spacing",
-  dramatic: "rich contrast mood, cinematic depth",
-} as const;
-
 export async function buildVariationPlans(
   choices: StudioChoices,
 ): Promise<VariationPlan[]> {
@@ -96,65 +100,59 @@ export async function buildVariationPlans(
   const qualityId = choices.qualityId ?? "standard";
   const primaryStyle = resolveStyleId(choices.styleId, analysis);
   const angleId = resolveAngleId(choices.angleId, analysis);
-  const lightingId = resolveLightingId(choices.lightingId, analysis);
-  const category = analysis?.category ?? "general";
+  const baseLighting = resolveLightingId(choices.lightingId, analysis);
+  const productSummary = analysis?.summary;
 
-  const [styleA, styleB, styleC] = pickVariationStyleIds(
-    choices.styleId,
-    category,
-    analysis,
-  );
-
-  const styles: Array<{ id: StudioStyleId; mood: keyof typeof MOOD_MODIFIERS }> = [
-    { id: styleA, mood: "classic" },
-    { id: styleB, mood: "elevated" },
-    { id: styleC, mood: "dramatic" },
+  const moods: Array<keyof typeof MOOD_MODIFIERS> = [
+    "classic",
+    "elevated",
+    "dramatic",
   ];
-
-  const lightingCycle: LightingId[] = [
-    lightingId,
-    lightingId === "soft" ? "bright" : "soft",
-    lightingId === "dramatic" ? "luxury" : "dramatic",
-  ];
-
   const labels: Array<"A" | "B" | "C"> = ["A", "B", "C"];
   const quality = QUALITY_PRESETS[qualityId];
+  const styleLabel = STUDIO_STYLES[primaryStyle].label;
+
+  const lightingCycle: LightingId[] = [
+    baseLighting,
+    baseLighting === "soft" ? "bright" : "soft",
+    baseLighting === "dramatic" ? "luxury" : "dramatic",
+  ];
 
   if (choices.customPrompt) {
     const customBase = await enhanceCustomBackgroundPrompt(choices.customPrompt);
     return labels.map((label, i) => ({
       label,
       styleId: primaryStyle,
-      styleLabel: "Custom scene",
-      backgroundPrompt: `${customBase}, ${MOOD_MODIFIERS[styles[i].mood]}, ${CAMERA_ANGLES[angleId].promptSuffix}, ${LIGHTING_PRESETS[lightingCycle[i]].promptSuffix}`,
+      styleLabel: `${styleLabel} — ${LIGHTING_PRESETS[lightingCycle[i]].label}`,
+      backgroundPrompt: `${customBase}, ${MOOD_MODIFIERS[moods[i]]}, ${CAMERA_ANGLES[angleId].promptSuffix}, ${LIGHTING_PRESETS[lightingCycle[i]].promptSuffix}, ${BASE_SUFFIX}`,
       padding: quality.padding + i * 0.01,
-      mood: styles[i].mood,
+      mood: moods[i],
     }));
   }
 
   return labels.map((label, i) => {
-    const styleId = styles[i].id;
     const light = lightingCycle[i];
     const padding =
       i === 0
         ? quality.padding
         : i === 1
-          ? Math.max(0.08, quality.padding - 0.02)
-          : Math.min(0.14, quality.padding + 0.02);
+          ? Math.max(0.1, quality.padding - 0.01)
+          : Math.min(0.14, quality.padding + 0.01);
 
     return {
       label,
-      styleId,
-      styleLabel: STUDIO_STYLES[styleId].label,
+      styleId: primaryStyle,
+      styleLabel: `${styleLabel} — ${LIGHTING_PRESETS[light].label}`,
       backgroundPrompt: buildScenePrompt(
-        styleId,
+        primaryStyle,
         angleId,
         light,
         qualityId,
-        MOOD_MODIFIERS[styles[i].mood],
+        MOOD_MODIFIERS[moods[i]],
+        productSummary,
       ),
       padding,
-      mood: styles[i].mood,
+      mood: moods[i],
     };
   });
 }

@@ -63,7 +63,7 @@ export const STUDIO_STYLES: Record<StudioStyleId, StudioStyle> = {
     label: "White Studio",
     description: "Clean Amazon / e-commerce look",
     scenePrompt:
-      "pure white seamless studio backdrop, soft diffused commercial lighting, ecommerce product photo",
+      "seamless pure white infinity curve studio backdrop, product standing on white surface",
   },
   luxury_black: {
     id: "luxury_black",
@@ -91,7 +91,7 @@ export const STUDIO_STYLES: Record<StudioStyleId, StudioStyle> = {
     label: "Wooden",
     description: "Warm natural wood table",
     scenePrompt:
-      "warm natural oak wood table with soft grain texture, cozy natural daylight",
+      "warm natural oak wood table surface, product placed on the table",
   },
   minimal: {
     id: "minimal",
@@ -112,7 +112,7 @@ export const STUDIO_STYLES: Record<StudioStyleId, StudioStyle> = {
     label: "Kitchen",
     description: "Fresh kitchen counter",
     scenePrompt:
-      "modern clean kitchen countertop, bright natural light, food product photography",
+      "modern kitchen marble countertop, product sitting on the counter, softly blurred kitchen background",
   },
   reflection: {
     id: "reflection",
