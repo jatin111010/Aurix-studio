@@ -1,4 +1,5 @@
-import { resolveBackground } from "@/lib/backgrounds";
+import { resolveBackground, resolveBackgroundAsync } from "@/lib/backgrounds";
+import { BACKGROUND_CUSTOM_ID } from "@/lib/config";
 import { briefToAdCopy, resolveAdBrief, type AdBrief } from "@/lib/ad-brief";
 import { compositeAdPost } from "@/lib/ad-composite";
 import type { AdCopyContent } from "@/lib/openai";
@@ -29,12 +30,15 @@ export async function buildStudioImage(
   backgroundId: string,
   customBackgroundPrompt?: string,
 ): Promise<BuiltStudioImage> {
-  const background = resolveBackground(backgroundId, customBackgroundPrompt);
+  const background =
+    backgroundId === BACKGROUND_CUSTOM_ID
+      ? await resolveBackgroundAsync(backgroundId, customBackgroundPrompt)
+      : resolveBackground(backgroundId, customBackgroundPrompt);
 
   const png = await editImage({
     imageUrl: inputImageUrl,
     backgroundPrompt: background.prompt,
-    padding: 0.1,
+    padding: 0.12,
   });
 
   return {
@@ -66,15 +70,29 @@ export async function buildAdImage(
   choices: AdChoices,
 ): Promise<BuiltAdImage> {
   const brief = await resolveAdBrief(choices);
-  const built = await buildStudioImage(
-    inputImageUrl,
-    brief.backgroundId,
-    brief.customBackgroundPrompt,
-  );
   const adCopy = briefToAdCopy(brief);
-  const png = await compositeAdPost(built.png, adCopy, brief.templateId);
 
-  return { ...built, png, adCopy, adBrief: brief };
+  // Clean product cutout — no messy square photo on the ad layout
+  const productCutout = await diecutImage({
+    imageUrl: inputImageUrl,
+    padding: 0.06,
+  });
+
+  const png = await compositeAdPost(
+    productCutout,
+    adCopy,
+    brief.templateId,
+    brief.backgroundId,
+  );
+
+  return {
+    png,
+    backgroundId: brief.backgroundId,
+    studioStyle: "scene",
+    photoroomMode: getPhotoroomMode(),
+    adCopy,
+    adBrief: brief,
+  };
 }
 
 export async function saveStudioGeneration(

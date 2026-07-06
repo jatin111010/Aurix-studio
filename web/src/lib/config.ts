@@ -41,34 +41,50 @@ export const BACKGROUND_CUSTOM_ID = "custom" as const;
 
 /** Preset backgrounds for studio shots and ad product photos (max 9 + custom = 10 WhatsApp list rows). */
 export const BACKGROUNDS = [
-  { id: "marble", label: "Marble", prompt: "elegant white marble surface" },
-  { id: "wood", label: "Wood", prompt: "warm natural wood table" },
-  { id: "studio", label: "Soft studio", prompt: "clean soft studio backdrop" },
-  { id: "sunlight", label: "Bright sunlight", prompt: "bright natural sunlight scene" },
+  {
+    id: "marble",
+    label: "Marble",
+    prompt: "elegant white Carrara marble surface with subtle grey veins",
+  },
+  {
+    id: "wood",
+    label: "Wood",
+    prompt: "warm natural oak wood table with soft grain texture",
+  },
+  {
+    id: "studio",
+    label: "Soft studio",
+    prompt: "clean white seamless studio backdrop with soft diffused light",
+  },
+  {
+    id: "sunlight",
+    label: "Bright sunlight",
+    prompt: "bright natural window sunlight on neutral surface, airy mood",
+  },
   {
     id: "luxury",
     label: "Dark luxury",
-    prompt: "dark black marble surface, premium luxury mood",
+    prompt: "polished black marble surface, moody premium luxury lighting",
   },
   {
     id: "pastel",
     label: "Pastel blush",
-    prompt: "soft blush pink backdrop, feminine elegant",
+    prompt: "soft blush pink pastel backdrop, gentle feminine elegance",
   },
   {
     id: "concrete",
     label: "Modern concrete",
-    prompt: "modern grey concrete texture, urban minimalist",
+    prompt: "smooth grey concrete surface, modern minimalist urban style",
   },
   {
     id: "nature",
     label: "Green nature",
-    prompt: "fresh green leaves and plants, outdoor natural light",
+    prompt: "fresh green tropical leaves bokeh, natural outdoor daylight",
   },
   {
     id: "festive",
     label: "Festive lights",
-    prompt: "warm golden diwali fairy lights bokeh background",
+    prompt: "warm golden diwali fairy lights bokeh, festive indian celebration",
   },
 ] as const;
 

@@ -1,4 +1,4 @@
-import { createCanvas, registerFont } from "canvas";
+import { createCanvas, registerFont, type CanvasRenderingContext2D } from "canvas";
 import fs from "fs";
 import path from "path";
 import type { AdTemplate } from "@/lib/ad-templates";
@@ -7,6 +7,13 @@ import type { AdCopyContent } from "@/lib/openai";
 
 const FONT_FAMILY = "VeloraAd";
 let fontsReady = false;
+
+export type TextZones = {
+  headline: { x: number; y: number; maxWidth: number };
+  subheadline: { x: number; y: number; maxWidth: number };
+  badge: { cx: number; cy: number; maxWidth: number } | null;
+  cta: { cx: number; cy: number; maxWidth: number };
+};
 
 function ensureFontsRegistered(): void {
   if (fontsReady) return;
@@ -26,7 +33,7 @@ function ensureFontsRegistered(): void {
   fontsReady = true;
 }
 
-function wrapHeadline(text: string, maxChars = 28): string[] {
+function wrapHeadline(text: string, maxChars = 26): string[] {
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let line = "";
@@ -43,12 +50,11 @@ function wrapHeadline(text: string, maxChars = 28): string[] {
   return lines.slice(0, 2);
 }
 
-function trimLine(
+function trimToWidth(
+  ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
-  ctx: ReturnType<ReturnType<typeof createCanvas>["getContext"]>,
 ): string {
-  if (!ctx) return text;
   if (ctx.measureText(text).width <= maxWidth) return text;
   let trimmed = text;
   while (trimmed.length > 3 && ctx.measureText(`${trimmed}…`).width > maxWidth) {
@@ -57,15 +63,62 @@ function trimLine(
   return `${trimmed}…`;
 }
 
-/**
- * Renders ad copy as a transparent PNG using node-canvas + bundled TTF fonts.
- * Works on Vercel (unlike Sharp SVG &lt;text&gt;, which needs system fontconfig).
- */
+function drawTextWithShadow(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fill: string,
+  shadow = "rgba(0,0,0,0.35)",
+): void {
+  ctx.save();
+  ctx.shadowColor = shadow;
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+export function getTextZones(template: AdTemplate, hasBadge: boolean): TextZones {
+  const headerMid = template.header.height / 2;
+  const badgeLeft =
+    AD_SIZE - template.badge.right - template.badge.width;
+  const badgeCx = badgeLeft + template.badge.width / 2;
+  const badgeCy = template.badge.top + template.badge.height / 2;
+
+  const ctaTop = AD_SIZE - template.cta.bottom - template.cta.height;
+  const ctaCx = AD_SIZE / 2;
+  const ctaCy = ctaTop + template.cta.height / 2;
+
+  const headlineMaxW = hasBadge ? badgeLeft - 48 : AD_SIZE - 80;
+
+  return {
+    headline: {
+      x: AD_SIZE / 2,
+      y: headerMid - 28,
+      maxWidth: headlineMaxW,
+    },
+    subheadline: {
+      x: AD_SIZE / 2,
+      y: headerMid + 42,
+      maxWidth: AD_SIZE - 100,
+    },
+    badge: hasBadge
+      ? { cx: badgeCx, cy: badgeCy, maxWidth: template.badge.width - 24 }
+      : null,
+    cta: {
+      cx: ctaCx,
+      cy: ctaCy,
+      maxWidth: template.cta.width - 40,
+    },
+  };
+}
+
 export function renderAdTextLayer(
   copy: AdCopyContent,
   template: AdTemplate,
-  badge: { cx: number; cy: number } | null,
-  cta: { cx: number; cy: number },
+  zones: TextZones,
 ): Buffer {
   ensureFontsRegistered();
 
@@ -73,34 +126,54 @@ export function renderAdTextLayer(
   const ctx = canvas.getContext("2d");
 
   const headlineLines = wrapHeadline(copy.headline);
-  const headlineY = AD_SIZE * 0.1;
-  const lineHeight = 62;
+  const lineHeight = 58;
 
-  ctx.fillStyle = template.headlineColor;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = `bold 52px "${FONT_FAMILY}"`;
+  ctx.font = `bold 50px "${FONT_FAMILY}"`;
+
   headlineLines.forEach((line, i) => {
-    ctx.fillText(line, AD_SIZE / 2, headlineY + i * lineHeight);
+    const trimmed = trimToWidth(ctx, line, zones.headline.maxWidth);
+    drawTextWithShadow(
+      ctx,
+      trimmed,
+      zones.headline.x,
+      zones.headline.y + i * lineHeight,
+      template.header.headlineColor,
+      template.id === "minimal" ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0.4)",
+    );
   });
 
-  ctx.font = `28px "${FONT_FAMILY}"`;
-  ctx.fillStyle = template.subColor;
-  const sub = trimLine(copy.subheadline, AD_SIZE * 0.9, ctx);
-  ctx.fillText(sub, AD_SIZE / 2, AD_SIZE * 0.22);
+  ctx.font = `26px "${FONT_FAMILY}"`;
+  const sub = trimToWidth(ctx, copy.subheadline, zones.subheadline.maxWidth);
+  ctx.fillStyle = template.header.subColor;
+  ctx.fillText(sub, zones.subheadline.x, zones.subheadline.y);
 
-  if (badge && copy.badge) {
-    ctx.font = `bold 26px "${FONT_FAMILY}"`;
-    ctx.fillStyle = template.badgeText;
+  if (zones.badge && copy.badge) {
+    ctx.font = `bold 28px "${FONT_FAMILY}"`;
     ctx.textBaseline = "middle";
-    ctx.fillText(copy.badge, badge.cx, badge.cy);
+    const badgeText = trimToWidth(ctx, copy.badge, zones.badge.maxWidth);
+    drawTextWithShadow(
+      ctx,
+      badgeText,
+      zones.badge.cx,
+      zones.badge.cy,
+      template.badge.text,
+      "rgba(0,0,0,0.25)",
+    );
   }
 
-  ctx.font = `bold 28px "${FONT_FAMILY}"`;
-  ctx.fillStyle = template.ctaText;
+  ctx.font = `bold 30px "${FONT_FAMILY}"`;
   ctx.textBaseline = "middle";
-  const ctaText = trimLine(copy.cta, 320, ctx);
-  ctx.fillText(ctaText, cta.cx, cta.cy);
+  const ctaText = trimToWidth(ctx, copy.cta, zones.cta.maxWidth);
+  drawTextWithShadow(
+    ctx,
+    ctaText,
+    zones.cta.cx,
+    zones.cta.cy,
+    template.cta.text,
+    template.id === "minimal" ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)",
+  );
 
   return canvas.toBuffer("image/png");
 }

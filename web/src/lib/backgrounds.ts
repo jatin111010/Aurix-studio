@@ -3,6 +3,10 @@ import {
   BACKGROUNDS,
   CUSTOM_BACKGROUND_CHOICE,
 } from "@/lib/config";
+import {
+  enhanceCustomBackgroundPrompt,
+  enhancePresetPrompt,
+} from "@/lib/background-prompt";
 
 export type ResolvedBackground = {
   id: string;
@@ -52,11 +56,11 @@ export function resolveBackground(
   customPrompt?: string,
 ): ResolvedBackground {
   if (backgroundId === BACKGROUND_CUSTOM_ID) {
-    const prompt =
+    const raw =
       sanitizeCustomBackgroundPrompt(customPrompt ?? "") ??
       "clean soft studio backdrop";
-    const shortLabel =
-      prompt.length > 36 ? `${prompt.slice(0, 36)}…` : prompt;
+    const prompt = `${raw}, professional product photography, soft commercial lighting`;
+    const shortLabel = raw.length > 36 ? `${raw.slice(0, 36)}…` : raw;
     return {
       id: BACKGROUND_CUSTOM_ID,
       label: `Custom — ${shortLabel}`,
@@ -68,8 +72,28 @@ export function resolveBackground(
   return {
     id: backgroundId,
     label: preset?.label ?? "Soft studio",
-    prompt: preset?.prompt ?? "clean soft studio backdrop",
+    prompt: enhancePresetPrompt(preset?.prompt ?? "clean soft studio backdrop"),
   };
+}
+
+/** AI-enhanced custom prompt for studio shots (better Photoroom results). */
+export async function resolveBackgroundAsync(
+  backgroundId: string,
+  customPrompt?: string,
+): Promise<ResolvedBackground> {
+  if (backgroundId === BACKGROUND_CUSTOM_ID) {
+    const raw =
+      sanitizeCustomBackgroundPrompt(customPrompt ?? "") ??
+      "clean soft studio backdrop";
+    const prompt = await enhanceCustomBackgroundPrompt(raw);
+    const shortLabel = raw.length > 36 ? `${raw.slice(0, 36)}…` : raw;
+    return {
+      id: BACKGROUND_CUSTOM_ID,
+      label: `Custom — ${shortLabel}`,
+      prompt,
+    };
+  }
+  return resolveBackground(backgroundId);
 }
 
 export function getBackgroundDisplayLabel(

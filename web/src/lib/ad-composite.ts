@@ -1,5 +1,5 @@
 import {
-  Circle,
+  Ellipse,
   FabricImage,
   Gradient,
   Rect,
@@ -9,12 +9,16 @@ import {
 import sharp from "sharp";
 import {
   AD_SIZE,
-  getAdTemplate,
+  getAdTemplateForBrief,
   type AdTemplate,
   type AdTemplateId,
 } from "@/lib/ad-templates";
 import type { AdCopyContent } from "@/lib/openai";
-import { renderAdTextLayer } from "@/lib/ad-text-canvas";
+import {
+  getTextZones,
+  renderAdTextLayer,
+  type TextZones,
+} from "@/lib/ad-text-canvas";
 
 export type { AdCopyContent };
 
@@ -36,7 +40,10 @@ async function loadProductImage(productPng: Buffer): Promise<FabricImage> {
   return img;
 }
 
-function addBackground(canvas: StaticCanvasType, template: AdTemplate): void {
+function addCanvasBackground(
+  canvas: StaticCanvasType,
+  template: AdTemplate,
+): void {
   const bg = new Rect({
     left: 0,
     top: 0,
@@ -57,82 +64,115 @@ function addBackground(canvas: StaticCanvasType, template: AdTemplate): void {
       ],
     }),
   );
-
   canvas.add(bg);
 }
 
-function layoutProduct(img: FabricImage): void {
-  const maxW = AD_SIZE * 0.72;
-  const maxH = AD_SIZE * 0.52;
-  const scale = Math.min(maxW / (img.width ?? 1), maxH / (img.height ?? 1));
-  img.scale(scale);
-  img.set({
-    left: AD_SIZE / 2,
-    top: AD_SIZE * 0.56,
-  });
+function addDecorations(canvas: StaticCanvasType, template: AdTemplate): void {
+  if (template.decor.showSideStripe) {
+    canvas.add(
+      new Rect({
+        left: 0,
+        top: 0,
+        width: 14,
+        height: AD_SIZE,
+        fill: template.decor.accent,
+        selectable: false,
+        evented: false,
+      }),
+    );
+  }
+
+  if (template.decor.showCornerOrbs) {
+    for (const [left, top] of [
+      [60, 60],
+      [AD_SIZE - 60, 60],
+      [60, AD_SIZE - 60],
+      [AD_SIZE - 60, AD_SIZE - 60],
+    ] as const) {
+      canvas.add(
+        new Ellipse({
+          left,
+          top,
+          rx: 80,
+          ry: 80,
+          fill: "rgba(251, 191, 36, 0.12)",
+          originX: "center",
+          originY: "center",
+          selectable: false,
+          evented: false,
+        }),
+      );
+    }
+  }
+
+  if (template.id === "minimal") {
+    canvas.add(
+      new Rect({
+        left: 36,
+        top: template.header.height + 24,
+        width: AD_SIZE - 72,
+        height: 2,
+        fill: "rgba(28, 25, 23, 0.08)",
+        selectable: false,
+        evented: false,
+      }),
+    );
+  }
 }
 
-function addBadgeShape(
-  canvas: StaticCanvasType,
-  template: AdTemplate,
-): { cx: number; cy: number } | null {
-  const badgeW = 200;
-  const badgeH = 56;
-  const left = AD_SIZE - badgeW - 36;
-  const top = 36;
-
+function addHeaderBand(canvas: StaticCanvasType, template: AdTemplate): void {
   canvas.add(
     new Rect({
-      left,
-      top,
-      width: badgeW,
-      height: badgeH,
-      rx: 28,
-      ry: 28,
-      fill: template.badgeBg,
+      left: 0,
+      top: 0,
+      width: AD_SIZE,
+      height: template.header.height,
+      fill: template.header.fill,
       selectable: false,
       evented: false,
     }),
   );
 
-  return { cx: left + badgeW / 2, cy: top + badgeH / 2 };
-}
-
-function addCtaShape(
-  canvas: StaticCanvasType,
-  template: AdTemplate,
-): { cx: number; cy: number } {
-  const btnW = 360;
-  const btnH = 64;
-  const left = (AD_SIZE - btnW) / 2;
-  const top = AD_SIZE * 0.86;
-
   canvas.add(
     new Rect({
-      left,
-      top,
-      width: btnW,
-      height: btnH,
-      rx: 32,
-      ry: 32,
-      fill: template.ctaBg,
+      left: 0,
+      top: template.header.height - 5,
+      width: AD_SIZE,
+      height: 5,
+      fill: template.header.accentLine,
       selectable: false,
       evented: false,
     }),
   );
-
-  return { cx: AD_SIZE / 2, cy: top + btnH / 2 };
 }
 
-function addProductFrame(canvas: StaticCanvasType, template: AdTemplate): void {
+function addProductStage(
+  canvas: StaticCanvasType,
+  template: AdTemplate,
+): void {
+  const cy = AD_SIZE * template.product.centerY;
+
   canvas.add(
-    new Circle({
+    new Ellipse({
       left: AD_SIZE / 2,
-      top: AD_SIZE * 0.56,
-      radius: AD_SIZE * 0.36,
-      fill: "rgba(255,255,255,0.08)",
-      stroke: template.accent,
-      strokeWidth: 3,
+      top: cy + AD_SIZE * 0.14,
+      rx: AD_SIZE * 0.32,
+      ry: AD_SIZE * 0.045,
+      fill: template.product.shadowColor,
+      originX: "center",
+      originY: "center",
+      selectable: false,
+      evented: false,
+    }),
+  );
+
+  canvas.add(
+    new Ellipse({
+      left: AD_SIZE / 2,
+      top: cy,
+      rx: AD_SIZE * 0.34,
+      ry: AD_SIZE * 0.34,
+      fill: template.product.glowColor,
       originX: "center",
       originY: "center",
       selectable: false,
@@ -141,30 +181,129 @@ function addProductFrame(canvas: StaticCanvasType, template: AdTemplate): void {
   );
 }
 
-/** Fabric.js layout (shapes + product) + canvas text overlay. */
+function addBadgeShape(
+  canvas: StaticCanvasType,
+  template: AdTemplate,
+): { cx: number; cy: number } | null {
+  const b = template.badge;
+  const left = AD_SIZE - b.right - b.width;
+  const top = b.top;
+
+  canvas.add(
+    new Rect({
+      left: left + 3,
+      top: top + 4,
+      width: b.width,
+      height: b.height,
+      rx: b.height / 2,
+      ry: b.height / 2,
+      fill: "rgba(0,0,0,0.22)",
+      selectable: false,
+      evented: false,
+    }),
+  );
+
+  canvas.add(
+    new Rect({
+      left,
+      top,
+      width: b.width,
+      height: b.height,
+      rx: b.height / 2,
+      ry: b.height / 2,
+      fill: b.bg,
+      selectable: false,
+      evented: false,
+    }),
+  );
+
+  return { cx: left + b.width / 2, cy: top + b.height / 2 };
+}
+
+function addCtaBar(
+  canvas: StaticCanvasType,
+  template: AdTemplate,
+): { cx: number; cy: number } {
+  const c = template.cta;
+  const left = (AD_SIZE - c.width) / 2;
+  const top = AD_SIZE - c.bottom - c.height;
+
+  canvas.add(
+    new Rect({
+      left: left + 2,
+      top: top + 3,
+      width: c.width,
+      height: c.height,
+      rx: c.height / 2,
+      ry: c.height / 2,
+      fill: "rgba(0,0,0,0.25)",
+      selectable: false,
+      evented: false,
+    }),
+  );
+
+  canvas.add(
+    new Rect({
+      left,
+      top,
+      width: c.width,
+      height: c.height,
+      rx: c.height / 2,
+      ry: c.height / 2,
+      fill: c.bg,
+      selectable: false,
+      evented: false,
+    }),
+  );
+
+  return { cx: AD_SIZE / 2, cy: top + c.height / 2 };
+}
+
+function layoutProduct(img: FabricImage, template: AdTemplate): void {
+  const maxW = AD_SIZE * template.product.maxWidthRatio;
+  const maxH = AD_SIZE * template.product.maxHeightRatio;
+  const scale = Math.min(maxW / (img.width ?? 1), maxH / (img.height ?? 1));
+  img.scale(scale);
+  img.set({
+    left: AD_SIZE / 2,
+    top: AD_SIZE * template.product.centerY,
+  });
+}
+
+/**
+ * Composite a die-cut product PNG onto a styled ad template.
+ * Product should be transparent background (from diecutImage).
+ */
 export async function compositeAdPost(
   productPng: Buffer,
   copy: AdCopyContent,
   templateId: AdTemplateId,
+  backgroundId = "studio",
 ): Promise<Buffer> {
-  const template = getAdTemplate(templateId);
+  const template = getAdTemplateForBrief(templateId, backgroundId);
   const canvas = new StaticCanvas(undefined, {
     width: AD_SIZE,
     height: AD_SIZE,
   });
 
-  addBackground(canvas, template);
-  const badge = copy.badge ? addBadgeShape(canvas, template) : null;
-  addProductFrame(canvas, template);
+  addCanvasBackground(canvas, template);
+  addDecorations(canvas, template);
+  addHeaderBand(canvas, template);
+
+  const hasBadge = Boolean(copy.badge);
+  if (hasBadge) addBadgeShape(canvas, template);
+
+  addProductStage(canvas, template);
 
   const product = await loadProductImage(productPng);
-  layoutProduct(product);
+  layoutProduct(product, template);
   canvas.add(product);
 
-  const cta = addCtaShape(canvas, template);
+  addCtaBar(canvas, template);
 
+  const zones: TextZones = getTextZones(template, hasBadge);
   const basePng = await canvasToPngBuffer(canvas);
-  const textLayer = renderAdTextLayer(copy, template, badge, cta);
+  const textLayer = renderAdTextLayer(copy, template, zones);
 
   return sharp(basePng)
     .composite([{ input: textLayer, top: 0, left: 0 }])
