@@ -1,6 +1,6 @@
 /**
- * Product-aware Photoroom scene prompts — realistic backgrounds matched to what
- * the merchant photographed, not generic presets.
+ * Product-aware Photoroom scene prompts — professional photoshoot stages
+ * with visible backgrounds, real props, lighting, and shadows.
  */
 
 import type { ProductAnalysis } from "@/lib/studio-analysis";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/studio-options";
 
 const PHOTOROOM_SUFFIX =
-  "photorealistic commercial packshot, only the main product visible, upright and centered, packaging text sharp and readable, product resting naturally on the surface with soft contact shadow, no clutter, no hands, no extra objects, sharp product focus, shallow depth of field";
+  "professional commercial product photoshoot, photorealistic, sharp focus throughout, background fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, packaging text sharp and readable, looks like a real photographer shot this, no AI blur, no empty gradient backdrop, no hands, no watermarks";
 
 export type ProductScenePlan = {
   label: string;
@@ -28,9 +28,9 @@ export type ProductScenePlan = {
 };
 
 const MOOD_SUFFIX = {
-  classic: "balanced centered hero composition",
-  elevated: "slightly elevated angle, airy negative space",
-  dramatic: "rich contrast, cinematic depth, subtle vignette",
+  classic: "centered hero product composition, camera at eye level",
+  elevated: "slightly elevated three-quarter view, generous table space around product",
+  dramatic: "rich contrast lighting, premium advertising composition",
 } as const;
 
 const MOODS: Array<keyof typeof MOOD_SUFFIX> = ["classic", "elevated", "dramatic"];
@@ -48,33 +48,33 @@ function resolveStyleId(
 function categoryProps(category: ProductAnalysis["category"]): string {
   const hints: Record<ProductAnalysis["category"], string> = {
     food:
-      "subtle complementary food props softly blurred in background, natural grocery or gifting context",
+      "wooden kitchen table with a small ceramic bowl of matching dry fruits or ingredients clearly visible beside the product, warm window light, soft natural shadow",
     cosmetics:
-      "spa-like vanity surface, soft petals or cotton accents blurred, beauty retail atmosphere",
+      "marble vanity with cotton pads and a small flower vase clearly visible beside the product, soft daylight, gentle shadow under the bottle",
     perfume:
-      "luxury boutique display surface, silk fabric accent, premium fragrance counter mood",
+      "dark wood perfume counter with silk cloth and a crystal tray clearly visible, elegant side lighting, soft reflection shadow",
     electronics:
-      "modern desk or tech workspace surface, clean minimal gadgets blurred in distance",
+      "modern desk with a notebook and charging cable clearly visible beside the device, cool daylight, crisp contact shadow",
     jewelry:
-      "velvet or marble jewelry display tray, boutique lighting, elegant retail counter",
+      "velvet jewelry tray on marble with a small ring box clearly visible, boutique spotlight, soft shadow",
     shoes:
-      "urban concrete or wooden floor surface, lifestyle sneaker store atmosphere",
+      "wooden floor with a plant pot and sneaker box clearly visible in frame, natural daylight, grounded shadow",
     furniture:
-      "styled living space corner, complementary decor softly blurred, home interior",
+      "styled living room corner with cushion and side lamp clearly visible, warm ambient light, natural floor shadow",
     fashion:
-      "editorial studio with fabric draping, fashion boutique mood",
+      "boutique fitting area with fabric swatch and hanger clearly visible, soft fashion lighting, natural shadow",
     kitchen:
-      "kitchen counter with subtle cookware blurred, fresh cooking atmosphere",
+      "kitchen counter with wooden cutting board and spice jar clearly visible beside the product, bright window light, soft shadow",
     home_decor:
-      "styled shelf or side table in modern Indian home, warm ambient decor",
+      "styled side table with a book and small plant clearly visible, warm home lighting, natural shadow",
     beverages:
-      "bar counter or cafe table, condensation-friendly cool atmosphere, drink service mood",
+      "cafe table with a glass and coaster clearly visible beside the bottle, cool daylight, condensation-friendly lighting",
     medicine:
-      "clean clinical white pharmacy counter, trustworthy healthcare retail",
+      "clean white pharmacy counter with a prescription pad clearly visible, bright even light, soft shadow",
     luxury:
-      "premium gift boutique display, gold accents, high-end Indian gifting mood",
+      "premium gift table with ribbon spool and tissue paper clearly visible, warm gold accent light, elegant shadow",
     general:
-      "professional retail display surface appropriate to the product category",
+      "styled product table with one complementary prop clearly visible, professional softbox lighting, natural contact shadow",
   };
   return hints[category] ?? hints.general;
 }
@@ -88,33 +88,24 @@ function fallbackScenes(
   const setting = analysis.idealSetting?.trim();
   const brandTone =
     analysis.brandColors.length > 0
-      ? `color palette harmonizing with ${analysis.brandColors.join(" and ")} tones`
-      : "";
+      ? `tones that complement ${analysis.brandColors.join(" and ")}`
+      : "natural warm tones";
 
   const cores = [
-    `${style.scenePrompt}, ${setting ?? props}, ${brandTone}, authentic lifestyle retail display`.replace(
-      /,\s*,/g,
-      ",",
-    ),
-    `${style.scenePrompt}, ${props}, ${brandTone}, clean modern shop counter atmosphere`.replace(
-      /,\s*,/g,
-      ",",
-    ),
-    `${style.scenePrompt}, ${setting ?? props}, ${brandTone}, premium gifting boutique display`.replace(
-      /,\s*,/g,
-      ",",
-    ),
+    `professional photoshoot on ${setting ?? "a real kitchen or product table"}, ${props}, ${brandTone}, background walls and props fully visible and sharp`,
+    `professional retail display photoshoot, ${props}, ${brandTone}, clean shop counter, background fully visible, soft directional light from the left`,
+    `premium advertising photoshoot, ${style.scenePrompt || "styled product table"}, ${props}, ${brandTone}, background detailed and sharp, elegant side lighting with soft contact shadow`,
   ];
 
-  const labels = ["Lifestyle", "Retail counter", "Premium display"];
+  const labels = ["Kitchen table", "Retail counter", "Premium shoot"];
 
   return MOODS.map((mood, i) => ({
     label: labels[i],
     lightingId: "soft" as LightingId,
-    sceneCore: cores[i],
+    sceneCore: cores[i].replace(/,\s*,/g, ","),
     productClarity:
       analysis.productClarity ||
-      "center the main product upright, keep packaging sharp, remove all clutter",
+      "main product upright and centered, packaging sharp and readable, no clutter on the product itself",
     mood,
   }));
 }
@@ -145,43 +136,48 @@ export async function generateProductScenePlans(
         messages: [
           {
             role: "system",
-            content: `You are an expert commercial product photographer for Indian e-commerce and WhatsApp sellers.
+            content: `You write PROFESSIONAL PRODUCT PHOTOSHOOT prompts for Photoroom AI backgrounds.
 
-Study the product photo and create 3 DIFFERENT PHOTOREALISTIC environments where this exact product would naturally be photographed for Indian e-commerce.
+Goal: the final image must look like a REAL photographer shot it in a real location — NOT a blurry AI backdrop.
 
-Merchant chose style direction: "${style.label}" — ${style.description}
-Use this as the visual mood, but each scene should be a distinct real location.
+Merchant style direction: "${style.label}" — ${style.description}
+(Use this as mood, but invent concrete real photoshoot sets.)
 
-Product context:
-- Main product to keep: ${analysis.mainProduct}
+Product:
+- Main product: ${analysis.mainProduct}
 - Category: ${analysis.category}
-- Description: ${analysis.summary}
+- Summary: ${analysis.summary}
 - Packaging: ${analysis.packagingType}
 - Premium level: ${analysis.premiumLevel}
 - Brand colors: ${analysis.brandColors.join(", ") || "unknown"}
-- Ideal real-world setting: ${analysis.idealSetting || "infer from product"}
-- Source photo quality: ${analysis.photoQuality}
-- Source photo issues: ${analysis.photoIssues.join("; ") || "none noted"}
-- Product clarity goal: ${analysis.productClarity}
+- Ideal setting hint: ${analysis.idealSetting || "infer from product"}
+- Photo issues to fix: ${analysis.photoIssues.join("; ") || "messy phone photo"}
 
-Rules for each scene prompt (the "scene" field):
-- Describe ONLY the physical environment: surface material, background, subtle blurred props
-- Each of the 3 scenes must be a DIFFERENT realistic location (e.g. kitchen counter vs wooden gift table vs supermarket shelf)
-- Props must match the product category — subtle, blurred, never blocking the product area
-- Must look like a real photograph location, not a generic AI gradient
-- Indian market context when relevant (gifting, kirana, festive hamper, premium retail)
-- Assume the MAIN product has already been isolated from the messy photo — design a clean hero stage for it
-- Do NOT describe lighting — only the physical setting
-- Max 40 words per scene
-- Do NOT mention text, logos, watermarks, people, hands, clutter, or the product name
+Write 3 DIFFERENT full photoshoot scenes. Each "scene" must include ALL of:
+1. Exact surface (e.g. oak kitchen table, white marble counter, walnut gift table)
+2. 1–3 complementary props that match THIS product and are CLEARLY VISIBLE (not blurred)
+   Example for raisins/dry fruits: small ceramic bowl of cashews, scattered almonds, linen napkin
+   Example for cosmetics: cotton pads, tiny flower vase, glass dropper bottle
+   Example for spices: wooden spoon, spice jar, cutting board
+3. Visible background details (wall, window, shelf, tiles) — SHARP and readable, NOT blurry, NOT bokeh, NOT empty gradient
+4. Lighting direction and quality (e.g. soft morning window light from the left, softbox key light, warm afternoon side light)
+5. Natural contact shadow under the product
 
-Also return one shared productClarity sentence for how the isolated product should look in every variation.
+Hard rules:
+- Background and props must be VISIBLE and detailed — never say blur, bokeh, shallow depth of field, out of focus, or soft background
+- Props must relate to the actual product (food → food props, beauty → vanity props)
+- Product stays the hero; props sit beside/behind, never covering packaging text
+- Sound like a real Indian commercial photoshoot (home kitchen, kirana display, festive gift table, boutique counter when relevant)
+- 45–70 words per scene
+- Do NOT mention brand names, logos, watermarks, people, or hands
 
-Return JSON:
+Also return productClarity: how the main product itself should look (upright, sharp label, etc.)
+
+Return JSON only:
 {
-  "productClarity": "one sentence: upright centered main product, sharp packaging, no clutter",
+  "productClarity": "one sentence about product presentation",
   "scenes": [
-    { "label": "2-4 word location name", "scene": "physical environment description only" },
+    { "label": "2-4 word set name", "scene": "full photoshoot description with surface + visible props + visible background + lighting + shadow" },
     { "label": "...", "scene": "..." },
     { "label": "...", "scene": "..." }
   ]
@@ -192,14 +188,14 @@ Return JSON:
             content: [
               {
                 type: "text",
-                text: "The merchant photo may be messy. Focus on the MAIN product only. Create 3 clean realistic stages for that product.",
+                text: "Look at this product. Write 3 professional photoshoot prompts with visible backgrounds, matching props, lighting, and shadows — like a real commercial shoot, not a blurry AI background.",
               },
               { type: "image_url", image_url: { url: imageUrl } },
             ],
           },
         ],
-        max_tokens: 500,
-        temperature: 0.55,
+        max_tokens: 900,
+        temperature: 0.65,
       }),
     });
 
@@ -217,7 +213,7 @@ Return JSON:
       productClarity?: string;
       scenes?: Array<{ label?: string; scene?: string }>;
     };
-    const scenes = parsed.scenes?.filter((s) => s.scene && s.scene.length > 12);
+    const scenes = parsed.scenes?.filter((s) => s.scene && s.scene.length > 20);
 
     if (!scenes || scenes.length < 3) {
       return fallbackScenes(analysis, resolvedStyle);
@@ -226,18 +222,30 @@ Return JSON:
     const clarity =
       parsed.productClarity?.trim() ||
       analysis.productClarity ||
-      "center the main product upright, keep packaging sharp, remove all clutter";
+      "main product upright and centered, packaging sharp and readable, no clutter on the product itself";
 
     return scenes.slice(0, 3).map((s, i) => ({
       label: (s.label ?? `Scene ${i + 1}`).slice(0, 32),
       lightingId: "soft" as LightingId,
-      sceneCore: s.scene!.trim(),
-      productClarity: clarity.slice(0, 200),
+      sceneCore: stripBlurLanguage(s.scene!.trim()),
+      productClarity: clarity.slice(0, 220),
       mood: MOODS[i],
     }));
   } catch {
     return fallbackScenes(analysis, resolvedStyle);
   }
+}
+
+/** Remove blur/bokeh wording if the model still slips it in. */
+function stripBlurLanguage(scene: string): string {
+  return scene
+    .replace(/\b(softly\s+)?blurred\b/gi, "clearly visible")
+    .replace(/\bbokeh\b/gi, "detailed background")
+    .replace(/\bshallow depth of field\b/gi, "sharp focus throughout")
+    .replace(/\bout of focus\b/gi, "in focus")
+    .replace(/\bsoft background\b/gi, "detailed visible background")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export function assemblePhotoroomPrompt(
@@ -262,9 +270,9 @@ export function assemblePhotoroomPrompt(
     "the main product";
 
   return [
-    `hero packshot of ${subject}`,
+    `professional product photoshoot of ${subject}`,
     options?.productClarity,
-    sceneCore,
+    stripBlurLanguage(sceneCore),
     MOOD_SUFFIX[mood],
     angle.promptSuffix,
     lighting.promptSuffix,

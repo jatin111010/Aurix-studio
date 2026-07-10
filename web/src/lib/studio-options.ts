@@ -105,14 +105,14 @@ export const STUDIO_STYLES: Record<StudioStyleId, StudioStyle> = {
     label: "Festival",
     description: "Warm festive Indian vibe",
     scenePrompt:
-      "warm golden diwali fairy lights bokeh background, festive indian celebration mood",
+      "festive Indian gift table with diya and marigold petals clearly visible, warm golden side light, soft contact shadow",
   },
   kitchen: {
     id: "kitchen",
     label: "Kitchen",
     description: "Fresh kitchen counter",
     scenePrompt:
-      "modern kitchen marble countertop, product sitting on the counter, softly blurred kitchen background",
+      "modern kitchen marble countertop with visible tiles and a small bowl of ingredients beside the product, bright window light, soft natural shadow",
   },
   reflection: {
     id: "reflection",
@@ -154,7 +154,7 @@ export const STUDIO_STYLES: Record<StudioStyleId, StudioStyle> = {
     label: "Outdoor",
     description: "Natural daylight scene",
     scenePrompt:
-      "outdoor natural daylight, soft bokeh greenery background, lifestyle product shot",
+      "outdoor wooden table with visible greenery and garden path in the background, natural daylight, soft grounded shadow",
   },
   living_room: {
     id: "living_room",

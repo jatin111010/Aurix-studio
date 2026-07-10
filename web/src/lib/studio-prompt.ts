@@ -21,12 +21,12 @@ import {
 } from "@/lib/studio-scene-prompts";
 
 const BASE_SUFFIX =
-  "photorealistic commercial packshot, product resting naturally on the surface with soft contact shadow at the base, sharp product focus, shallow depth of field, premium advertising quality";
+  "professional commercial product photoshoot, photorealistic, sharp focus throughout, background fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, looks like a real photographer shot this";
 
 const MOOD_MODIFIERS = {
-  classic: "balanced centered hero composition",
-  elevated: "slightly elevated camera angle, airy negative space",
-  dramatic: "rich contrast, cinematic depth, subtle vignette",
+  classic: "centered hero product composition, camera at eye level",
+  elevated: "slightly elevated three-quarter view, generous table space around product",
+  dramatic: "rich contrast lighting, premium advertising composition",
 } as const;
 
 export type VariationPlan = {
