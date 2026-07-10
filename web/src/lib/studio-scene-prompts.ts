@@ -16,12 +16,14 @@ import {
 } from "@/lib/studio-options";
 
 const PHOTOROOM_SUFFIX =
-  "photorealistic commercial packshot, product resting naturally on the surface with soft contact shadow, sharp product focus, shallow depth of field";
+  "photorealistic commercial packshot, only the main product visible, upright and centered, packaging text sharp and readable, product resting naturally on the surface with soft contact shadow, no clutter, no hands, no extra objects, sharp product focus, shallow depth of field";
 
 export type ProductScenePlan = {
   label: string;
   lightingId: LightingId;
   sceneCore: string;
+  /** How to present the isolated product clearly */
+  productClarity: string;
   mood: "classic" | "elevated" | "dramatic";
 };
 
@@ -110,6 +112,9 @@ function fallbackScenes(
     label: labels[i],
     lightingId: "soft" as LightingId,
     sceneCore: cores[i],
+    productClarity:
+      analysis.productClarity ||
+      "center the main product upright, keep packaging sharp, remove all clutter",
     mood,
   }));
 }
@@ -148,12 +153,16 @@ Merchant chose style direction: "${style.label}" — ${style.description}
 Use this as the visual mood, but each scene should be a distinct real location.
 
 Product context:
+- Main product to keep: ${analysis.mainProduct}
 - Category: ${analysis.category}
 - Description: ${analysis.summary}
 - Packaging: ${analysis.packagingType}
 - Premium level: ${analysis.premiumLevel}
 - Brand colors: ${analysis.brandColors.join(", ") || "unknown"}
 - Ideal real-world setting: ${analysis.idealSetting || "infer from product"}
+- Source photo quality: ${analysis.photoQuality}
+- Source photo issues: ${analysis.photoIssues.join("; ") || "none noted"}
+- Product clarity goal: ${analysis.productClarity}
 
 Rules for each scene prompt (the "scene" field):
 - Describe ONLY the physical environment: surface material, background, subtle blurred props
@@ -161,12 +170,16 @@ Rules for each scene prompt (the "scene" field):
 - Props must match the product category — subtle, blurred, never blocking the product area
 - Must look like a real photograph location, not a generic AI gradient
 - Indian market context when relevant (gifting, kirana, festive hamper, premium retail)
+- Assume the MAIN product has already been isolated from the messy photo — design a clean hero stage for it
 - Do NOT describe lighting — only the physical setting
 - Max 40 words per scene
-- Do NOT mention text, logos, watermarks, people, hands, or the product name
+- Do NOT mention text, logos, watermarks, people, hands, clutter, or the product name
+
+Also return one shared productClarity sentence for how the isolated product should look in every variation.
 
 Return JSON:
 {
+  "productClarity": "one sentence: upright centered main product, sharp packaging, no clutter",
   "scenes": [
     { "label": "2-4 word location name", "scene": "physical environment description only" },
     { "label": "...", "scene": "..." },
@@ -179,7 +192,7 @@ Return JSON:
             content: [
               {
                 type: "text",
-                text: "Create 3 realistic background scenes tailored to this product and the chosen style.",
+                text: "The merchant photo may be messy. Focus on the MAIN product only. Create 3 clean realistic stages for that product.",
               },
               { type: "image_url", image_url: { url: imageUrl } },
             ],
@@ -201,6 +214,7 @@ Return JSON:
     if (!raw) return fallbackScenes(analysis, resolvedStyle);
 
     const parsed = JSON.parse(raw) as {
+      productClarity?: string;
       scenes?: Array<{ label?: string; scene?: string }>;
     };
     const scenes = parsed.scenes?.filter((s) => s.scene && s.scene.length > 12);
@@ -209,10 +223,16 @@ Return JSON:
       return fallbackScenes(analysis, resolvedStyle);
     }
 
+    const clarity =
+      parsed.productClarity?.trim() ||
+      analysis.productClarity ||
+      "center the main product upright, keep packaging sharp, remove all clutter";
+
     return scenes.slice(0, 3).map((s, i) => ({
       label: (s.label ?? `Scene ${i + 1}`).slice(0, 32),
       lightingId: "soft" as LightingId,
       sceneCore: s.scene!.trim(),
+      productClarity: clarity.slice(0, 200),
       mood: MOODS[i],
     }));
   } catch {
@@ -226,18 +246,25 @@ export function assemblePhotoroomPrompt(
   angleId: CameraAngleId,
   lightingId: LightingId,
   qualityId: QualityId,
-  productSummary?: string,
+  options?: {
+    mainProduct?: string;
+    productClarity?: string;
+    productSummary?: string;
+  },
 ): string {
   const angle = CAMERA_ANGLES[angleId];
   const lighting = LIGHTING_PRESETS[lightingId];
   const quality = QUALITY_PRESETS[qualityId];
 
-  const productLead = productSummary
-    ? `the product is ${productSummary}, `
-    : "";
+  const subject =
+    options?.mainProduct ||
+    options?.productSummary ||
+    "the main product";
 
   return [
-    productLead + sceneCore,
+    `hero packshot of ${subject}`,
+    options?.productClarity,
+    sceneCore,
     MOOD_SUFFIX[mood],
     angle.promptSuffix,
     lighting.promptSuffix,

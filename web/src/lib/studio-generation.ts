@@ -21,21 +21,44 @@ export type BuiltStudioSet = {
   choices: StudioChoices;
 };
 
-function photoroomEnhancements(qualityId: StudioChoices["qualityId"]) {
+function shouldIsolateFirst(choices: StudioChoices): boolean {
+  const analysis = choices.analysis;
+  if (!analysis) return true;
+  if (analysis.isolateFirst) return true;
+  return analysis.photoQuality === "messy" || analysis.photoQuality === "cluttered";
+}
+
+function photoroomEnhancements(
+  qualityId: StudioChoices["qualityId"],
+  choices: StudioChoices,
+) {
   const q = qualityId ?? "standard";
+  const category = choices.analysis?.category;
+  const messy =
+    choices.analysis?.photoQuality === "messy" ||
+    choices.analysis?.photoQuality === "cluttered";
+
   return {
-    // Let Photoroom relight the product to match the scene (avoids pasted look).
     lightingMode: "ai.auto" as const,
     shadowMode: "ai.soft" as const,
-    // Photoroom expands short prompts into richer scenes — better backgrounds.
     expandPromptMode: "ai.auto" as const,
+    // Beautify helps messy packshots look sharper; food gets food mode.
+    beautifyMode: messy
+      ? category === "food" || category === "beverages"
+        ? ("ai.food" as const)
+        : ("ai.auto" as const)
+      : undefined,
     upscaleMode: q === "ultra" ? ("ai.slow" as const) : undefined,
   };
 }
 
 /**
  * Build studio variations one-by-one and call `onVariation` as each finishes.
- * Sends images to the user progressively so a slow 3rd render doesn't block delivery.
+ *
+ * Pipeline for messy merchant photos:
+ * 1) Isolate the main product (diecut) so clutter/hands/wrong framing are removed
+ * 2) Build product-clarity + realistic background prompts from AI analysis
+ * 3) Relight + soft shadow + scene composite on the clean cutout
  */
 export async function buildStudioVariationsProgressive(
   inputImageUrl: string,
@@ -65,17 +88,27 @@ export async function buildStudioVariationsProgressive(
 
   const plans = await buildVariationPlans(choices, inputImageUrl);
   const qualityId = choices.qualityId ?? "standard";
-  const enhancements = photoroomEnhancements(qualityId);
-  const seedBase = stableSeedFromText(`${inputImageUrl}|${choices.styleId}|${qualityId}`);
+  const enhancements = photoroomEnhancements(qualityId, choices);
+  const seedBase = stableSeedFromText(
+    `${inputImageUrl}|${choices.styleId}|${qualityId}`,
+  );
+
+  const isolate = shouldIsolateFirst(choices);
+  const cutoutPng = isolate
+    ? await diecutImage({
+        imageUrl: inputImageUrl,
+        padding: 0.03,
+      })
+    : null;
 
   const variations: StudioVariation[] = [];
 
-  // Use the original photo — Photoroom removes background, relights, shadows, and
-  // composites in one pass (much more natural than pre-cutout compositing).
   for (let idx = 0; idx < plans.length; idx += 1) {
     const plan = plans[idx];
     const png = await editImage({
-      imageUrl: inputImageUrl,
+      ...(cutoutPng
+        ? { imageFile: cutoutPng, imageFileName: "product.png" }
+        : { imageUrl: inputImageUrl }),
       backgroundPrompt: plan.backgroundPrompt,
       backgroundSeed: seedBase + idx * 101,
       ...enhancements,

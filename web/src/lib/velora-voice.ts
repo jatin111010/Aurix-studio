@@ -92,9 +92,9 @@ const COPY = {
     hinglish: "Aaj aap kya banana chahenge?",
   },
   studio_analyzing: {
-    en: "Let me take a look at your product… one moment 📸",
-    hi: "आपका product देख रही हूँ… एक पल 📸",
-    hinglish: "Aapka product dekh rahi hoon… ek second 📸",
+    en: "Looking at your photo — finding the main product and the best studio look… 📸",
+    hi: "आपकी photo देख रही हूँ — मुख्य product और best studio look ढूँढ रही हूँ… 📸",
+    hinglish: "Aapki photo dekh rahi hoon — main product aur best studio look dhoondh rahi hoon… 📸",
   },
   studio_pick_style: {
     en: "Here are the styles I recommend —",
@@ -160,9 +160,9 @@ const COPY = {
       "Jo scene dimaag mein hai, ek short line mein bata do.\n\nJaise: *wooden kitchen counter* ya *soft blue minimalist backdrop*",
   },
   studio_generating: {
-    en: "Perfect — designing 3 realistic backgrounds matched to your product. Images arrive one by one ⏳",
-    hi: "बढ़िया — आपके product के हिसाब से 3 realistic backgrounds बना रही हूँ। Images एक-एक करके आएंगी ⏳",
-    hinglish: "Perfect — aapke product ke hisaab se 3 realistic backgrounds bana rahi hoon. Images ek-ek karke aayengi ⏳",
+    en: "Perfect — isolating your main product, then building 3 realistic studio scenes. Images arrive one by one ⏳",
+    hi: "बढ़िया — मुख्य product निकाल रही हूँ, फिर 3 realistic studio scenes बनाऊँगी। Images एक-एक करके आएंगी ⏳",
+    hinglish: "Perfect — main product nikaal rahi hoon, phir 3 realistic studio scenes banaungi. Images ek-ek karke aayengi ⏳",
   },
   diecut_generating: {
     en: "On it — creating your die-cut (transparent PNG). About 10–20 seconds ⏳",

@@ -58,22 +58,34 @@ function langOf(choices: Record<string, unknown>): VeloraLang {
 function analysisIntro(analysis: ProductAnalysis, lang: VeloraLang): string {
   const summary = analysis.summary;
   const setting = analysis.idealSetting;
+  const messy =
+    analysis.photoQuality === "messy" || analysis.photoQuality === "cluttered";
+
   if (lang === "hi") {
+    const cleanup = messy
+      ? `\n\nPhoto थोड़ी messy है — मैं *मुख्य product* निकालकर clean studio look बनाऊँगी।`
+      : "";
     const settingLine = setting
       ? `\n\nसबसे natural look के लिए *${setting}* जैसी setting suggest करूँगी।`
       : "";
-    return `मैंने आपका product देख लिया।\n\nयह *${summary}* जैसा लगता है।${settingLine}\n\nइस तरह के products के लिए ये studio styles सबसे अच्छे रहते हैं —`;
+    return `मैंने आपका product देख लिया।\n\nयह *${summary}* जैसा लगता है।${cleanup}${settingLine}\n\nइस तरह के products के लिए ये studio styles सबसे अच्छे रहते हैं —`;
   }
   if (lang === "hinglish") {
+    const cleanup = messy
+      ? `\n\nPhoto thodi messy hai — main *main product* nikaal ke clean studio look banaungi.`
+      : "";
     const settingLine = setting
       ? `\n\nSabse natural look ke liye *${setting}* jaisi setting suggest karungi.`
       : "";
-    return `Maine aapka product dekh liya.\n\nYeh *${summary}* jaisa lagta hai.${settingLine}\n\nIs type ke products ke liye yeh studio styles best perform karte hain —`;
+    return `Maine aapka product dekh liya.\n\nYeh *${summary}* jaisa lagta hai.${cleanup}${settingLine}\n\nIs type ke products ke liye yeh studio styles best perform karte hain —`;
   }
+  const cleanup = messy
+    ? `\n\nThe photo is a bit messy — I'll isolate the *main product* and rebuild a clean studio look.`
+    : "";
   const settingLine = setting
     ? `\n\nFor the most natural look I'll suggest scenes like *${setting}*.`
     : "";
-  return `I've looked at your product.\n\nIt looks like *${summary}*.${settingLine}\n\nFor products like this, these studio styles usually work best —`;
+  return `I've looked at your product.\n\nIt looks like *${summary}*.${cleanup}${settingLine}\n\nFor products like this, these studio styles usually work best —`;
 }
 
 function defaultChoices(

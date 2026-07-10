@@ -163,7 +163,11 @@ export async function buildVariationPlans(
           angleId,
           light,
           qualityId,
-          productSummary,
+          {
+            mainProduct: analysis.mainProduct,
+            productClarity: plan.productClarity || analysis.productClarity,
+            productSummary,
+          },
         ),
         padding,
         mood: plan.mood,
