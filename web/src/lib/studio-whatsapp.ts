@@ -286,7 +286,13 @@ async function runStudioGeneration(
       step: studioGenerationErrorStep(choices),
       choices,
     });
-    await sendText(to, say(lang, "err_generation_failed"));
+    const detail =
+      error instanceof Error ? error.message.slice(0, 120) : "unknown error";
+    console.error("Studio failure detail:", detail);
+    await sendText(
+      to,
+      `${say(lang, "err_generation_failed")}\n\n(Tech: ${detail})`,
+    );
   }
 }
 

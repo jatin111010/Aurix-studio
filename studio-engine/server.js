@@ -301,15 +301,24 @@ app.post("/process-studio-request", async (req, res) => {
     let imageBuffer;
 
     if (mode === "catalog") {
-      // Pure white ecommerce shoot
-      imageBuffer = await callPhotoroomEdit({
-        imageUrl,
-        removeBackground: "true",
-        "background.color": "FFFFFF",
-        padding: "0.15",
-        "shadow.mode": "ai.soft",
-        "textRemoval.mode": "artificial",
-      });
+      // Pure white ecommerce shoot — soft shadow OK on solid color
+      try {
+        imageBuffer = await callPhotoroomEdit({
+          imageUrl,
+          removeBackground: "true",
+          "background.color": "FFFFFF",
+          padding: "0.15",
+          "shadow.mode": "ai.soft",
+        });
+      } catch (error) {
+        console.error("Catalog primary failed, retrying without shadow:", error);
+        imageBuffer = await callPhotoroomEdit({
+          imageUrl,
+          removeBackground: "true",
+          "background.color": "FFFFFF",
+          padding: "0.15",
+        });
+      }
     } else {
       // Social ad shoot — expand vibe into Photoroom prompt first
       backgroundPrompt = await generateAdBackgroundPrompt(
@@ -317,14 +326,23 @@ app.post("/process-studio-request", async (req, res) => {
         userVibeText,
       );
 
-      imageBuffer = await callPhotoroomEdit({
-        imageUrl,
-        removeBackground: "true",
-        "background.prompt": backgroundPrompt,
-        padding: "0.15",
-        "shadow.mode": "ai.soft",
-        "textRemoval.mode": "artificial",
-      });
+      // AI backgrounds already include shadows — do not set shadow.mode
+      try {
+        imageBuffer = await callPhotoroomEdit({
+          imageUrl,
+          removeBackground: "true",
+          "background.prompt": backgroundPrompt,
+          padding: "0.15",
+        });
+      } catch (error) {
+        console.error("Ad primary failed, retrying shorter prompt:", error);
+        imageBuffer = await callPhotoroomEdit({
+          imageUrl,
+          removeBackground: "true",
+          "background.prompt": String(backgroundPrompt).slice(0, 220),
+          padding: "0.15",
+        });
+      }
     }
 
     const outputUrl = await saveOutputImage(imageBuffer);

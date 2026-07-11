@@ -218,6 +218,21 @@ async function callPhotoroomEdit(
   return Buffer.from(await response.arrayBuffer());
 }
 
+/** Try primary fields; on failure retry with a safer minimal set. */
+async function callPhotoroomEditSafe(
+  primary: Record<string, string>,
+  fallback?: Record<string, string>,
+): Promise<Buffer> {
+  try {
+    return await callPhotoroomEdit(primary);
+  } catch (error) {
+    console.error("Photoroom primary call failed:", error);
+    if (!fallback) throw error;
+    console.warn("Retrying Photoroom with safer parameters…");
+    return callPhotoroomEdit(fallback);
+  }
+}
+
 function buildMarketing(
   mode: StudioEngineMode,
   analysis: StudioEngineAnalysis,
@@ -268,24 +283,41 @@ export async function processStudioRequest(
   let png: Buffer;
 
   if (mode === "catalog") {
-    png = await callPhotoroomEdit({
-      imageUrl,
-      removeBackground: "true",
-      "background.color": "FFFFFF",
-      padding: "0.15",
-      "shadow.mode": "ai.soft",
-      "textRemoval.mode": "artificial",
-    });
+    // White packshot — soft shadow OK on solid color backgrounds
+    png = await callPhotoroomEditSafe(
+      {
+        imageUrl,
+        removeBackground: "true",
+        "background.color": "FFFFFF",
+        padding: "0.15",
+        "shadow.mode": "ai.soft",
+      },
+      {
+        imageUrl,
+        removeBackground: "true",
+        "background.color": "FFFFFF",
+        padding: "0.15",
+      },
+    );
   } else {
     backgroundPrompt = await generateAdBackgroundPrompt(analysis, userVibeText);
-    png = await callPhotoroomEdit({
-      imageUrl,
-      removeBackground: "true",
-      "background.prompt": backgroundPrompt,
-      padding: "0.15",
-      "shadow.mode": "ai.soft",
-      "textRemoval.mode": "artificial",
-    });
+    // AI backgrounds already include contact shadows — do NOT also set shadow.mode
+    // (Photoroom docs: combining AI background + AI shadow often fails)
+    png = await callPhotoroomEditSafe(
+      {
+        imageUrl,
+        removeBackground: "true",
+        "background.prompt": backgroundPrompt,
+        padding: "0.15",
+        "expandPrompt.mode": "ai.auto",
+      },
+      {
+        imageUrl,
+        removeBackground: "true",
+        "background.prompt": backgroundPrompt.slice(0, 220),
+        padding: "0.15",
+      },
+    );
   }
 
   const outputUrl = uploadUserId
