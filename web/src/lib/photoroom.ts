@@ -27,8 +27,6 @@ export type PhotoroomEditOptions = {
   /**
    * Controls prompt expansion behavior. When set to `ai.never`, Photoroom will not
    * auto-expand the prompt (often improves prompt adherence for packshots).
-   *
-   * OpenAPI shows `expandPrompt.mode` affecting `background.prompt`.
    */
   expandPromptMode?: "ai.auto" | "ai.never";
   /**
@@ -41,7 +39,20 @@ export type PhotoroomEditOptions = {
   /** Upscale the output for sharper results (slow = best quality). */
   upscaleMode?: "ai.fast" | "ai.slow";
   /** Omit or pass null when using AI backgrounds (they already include shadows). */
-  shadowMode?: "ai.soft" | "ai.hard" | "ai.floating" | null;
+  shadowMode?:
+    | "ai.soft"
+    | "ai.hard"
+    | "ai.floating"
+    | "ai.auto-with-overrides"
+    | null;
+  /** Advanced shadow overrides (requires pr-ai-shadows-model-version: 2026-04-15) */
+  shadowSubjectPoseOverride?: string;
+  shadowDirectionOverride?: string;
+  shadowIntensityOverride?: number | string;
+  shadowSoftnessOverride?: number | string;
+  textRemovalMode?: "ai.artificial" | "ai.natural" | "ai.all";
+  uncropMode?: "ai.auto";
+  exportFormat?: "png" | "webp" | "jpg";
   padding?: number;
   /** Tight crop to product subject — die-cut / sticker style */
   outputSize?: "auto" | "originalImage" | "croppedSubject" | string;
@@ -71,6 +82,26 @@ export function getPhotoroomMode(): PhotoroomMode {
   return getMode();
 }
 
+/** Premium studio headers for backgrounds + advanced shadows. */
+export function photoroomStudioHeaders(apiKey: string): Record<string, string> {
+  return {
+    "x-api-key": apiKey,
+    "pr-ai-background-model-version": "3",
+    "pr-ai-shadows-model-version": "2026-04-15",
+  };
+}
+
+function appendIfPresent(
+  form: FormData,
+  key: string,
+  value: string | number | undefined | null,
+): void {
+  if (value === undefined || value === null) return;
+  const str = String(value).trim();
+  if (!str) return;
+  form.append(key, str);
+}
+
 export async function editImage(
   options: PhotoroomEditOptions,
 ): Promise<Buffer> {
@@ -93,8 +124,6 @@ export async function editImage(
     throw new Error("Provide imageFile or imageUrl");
   }
 
-  const usingAiBackground = Boolean(options.backgroundPrompt);
-
   if (options.backgroundPrompt) {
     form.append("background.prompt", options.backgroundPrompt);
     if (typeof options.backgroundSeed === "number") {
@@ -109,25 +138,40 @@ export async function editImage(
     form.append("background.color", "F5F5F5");
   }
 
-  if (options.lightingMode) {
-    form.append("lighting.mode", options.lightingMode);
-  }
-  if (options.beautifyMode) {
-    form.append("beautify.mode", options.beautifyMode);
-  }
-  if (options.upscaleMode) {
-    form.append("upscale.mode", options.upscaleMode);
+  appendIfPresent(form, "lighting.mode", options.lightingMode);
+  appendIfPresent(form, "beautify.mode", options.beautifyMode);
+  appendIfPresent(form, "upscale.mode", options.upscaleMode);
+  appendIfPresent(form, "textRemoval.mode", options.textRemovalMode);
+  appendIfPresent(form, "uncrop.mode", options.uncropMode);
+  appendIfPresent(form, "export.format", options.exportFormat ?? "png");
+
+  if (options.shadowMode) {
+    form.append("shadow.mode", options.shadowMode);
+    if (options.shadowMode === "ai.auto-with-overrides") {
+      appendIfPresent(
+        form,
+        "shadow.subjectPoseOverride",
+        options.shadowSubjectPoseOverride,
+      );
+      appendIfPresent(
+        form,
+        "shadow.directionOverride",
+        options.shadowDirectionOverride,
+      );
+      appendIfPresent(
+        form,
+        "shadow.intensityOverride",
+        options.shadowIntensityOverride,
+      );
+      appendIfPresent(
+        form,
+        "shadow.softnessOverride",
+        options.shadowSoftnessOverride,
+      );
+    }
   }
 
-  // AI backgrounds already include lighting/shadows. Combining them with
-  // AI shadows often fails with "Failed to apply shadow".
-  const shadowMode = usingAiBackground
-    ? (options.shadowMode ?? null)
-    : (options.shadowMode ?? "ai.soft");
-  if (shadowMode) {
-    form.append("shadow.mode", shadowMode);
-  }
-  form.append("padding", String(options.padding ?? 0.1));
+  form.append("padding", String(options.padding ?? 0.2));
 
   if (options.outputSize) {
     form.append("outputSize", options.outputSize);
@@ -135,11 +179,7 @@ export async function editImage(
 
   const response = await fetch(PHOTOROOM_EDIT_URL, {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      // Prefer newer AI background model when available
-      "pr-ai-background-model-version": "3",
-    },
+    headers: photoroomStudioHeaders(apiKey),
     body: form,
   });
 
@@ -155,8 +195,50 @@ export async function editImage(
 }
 
 /**
+ * Low-level multipart edit from a pre-built field map (+ optional file).
+ * Used by Studio Engine with OpenAI api_blueprint fields.
+ */
+export async function editImageFromFields(
+  fields: Record<string, string>,
+  imageFile?: Buffer,
+  imageFileName = "product.png",
+): Promise<Buffer> {
+  const apiKey = getPhotoroomApiKey();
+  const form = new FormData();
+
+  if (imageFile) {
+    form.append(
+      "imageFile",
+      new Blob([new Uint8Array(imageFile)]),
+      imageFileName,
+    );
+  }
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (imageFile && key === "imageUrl") continue;
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) continue;
+    form.append(key, trimmed);
+  }
+
+  const response = await fetch(PHOTOROOM_EDIT_URL, {
+    method: "POST",
+    headers: photoroomStudioHeaders(apiKey),
+    body: form,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Photoroom ${getMode()} error ${response.status}: ${detail || response.statusText}`,
+    );
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/**
  * Die-cut: remove background, transparent PNG, cropped tight to the product.
- * @see https://docs.photoroom.com/tutorials/how-to-create-sticker-images
  */
 export async function diecutImage(
   options: Pick<

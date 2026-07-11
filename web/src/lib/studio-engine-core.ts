@@ -5,21 +5,25 @@
  *  - catalog → solid canvas packshot (blueprint-driven)
  *  - ad      → GPT-4o vibe prompt → Photoroom AI background (model v3)
  *
- * Step 1 always runs the 14-point Master Creative Director analysis.
+ * Step 1 always runs the Master Creative Director analysis (precision framing + shadows).
  */
 
 import {
   CREATIVE_DIRECTOR_SYSTEM_PROMPT,
   CREATIVE_DIRECTOR_USER_TEXT,
+  blueprintToPhotoroomFields,
   normalizeCreativeDirectorAnalysis,
   type CreativeDirectorAnalysis,
   type StudioApiBlueprint,
 } from "@/lib/studio-analysis-prompt";
-import { diecutImage, getPhotoroomApiKey, getPhotoroomMode } from "@/lib/photoroom";
+import {
+  diecutImage,
+  editImageFromFields,
+  getPhotoroomMode,
+} from "@/lib/photoroom";
 import { uploadOutputPng } from "@/lib/storage";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const PHOTOROOM_EDIT_URL = "https://image-api.photoroom.com/v2/edit";
 
 export type StudioEngineMode = "catalog" | "ad";
 
@@ -102,54 +106,64 @@ function toEngineAnalysis(
 }
 
 /**
- * STEP 1 — Master AI Creative Director (14-point checklist → JSON blueprint)
+ * STEP 1 — Master AI Creative Director (precision framing + grounded shadows)
  */
 async function analyzeProductWithCreativeDirector(
   imageUrl: string,
 ): Promise<CreativeDirectorAnalysis> {
-  const response = await fetch(OPENAI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${requireOpenAiKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      max_tokens: 700,
-      messages: [
-        {
-          role: "system",
-          content: CREATIVE_DIRECTOR_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: CREATIVE_DIRECTOR_USER_TEXT },
-            { type: "image_url", image_url: { url: imageUrl } },
-          ],
-        },
-      ],
-    }),
-  });
+  try {
+    const response = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${requireOpenAiKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 800,
+        messages: [
+          {
+            role: "system",
+            content: CREATIVE_DIRECTOR_SYSTEM_PROMPT,
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: CREATIVE_DIRECTOR_USER_TEXT },
+              { type: "image_url", image_url: { url: imageUrl } },
+            ],
+          },
+        ],
+      }),
+    });
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`OpenAI analysis failed ${response.status}: ${detail}`);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`OpenAI analysis failed ${response.status}: ${detail}`);
+    }
+
+    const json = (await response.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const raw = json.choices?.[0]?.message?.content;
+    if (!raw) throw new Error("OpenAI analysis returned an empty response");
+
+    let parsed: Partial<CreativeDirectorAnalysis> & {
+      api_blueprint?: Partial<StudioApiBlueprint>;
+    };
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("OpenAI analysis returned invalid JSON");
+    }
+
+    return normalizeCreativeDirectorAnalysis(parsed);
+  } catch (error) {
+    console.error("Creative director analysis failed:", error);
+    throw error;
   }
-
-  const json = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const raw = json.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("OpenAI analysis returned an empty response");
-
-  const parsed = JSON.parse(raw) as Partial<CreativeDirectorAnalysis> & {
-    api_blueprint?: Partial<StudioApiBlueprint>;
-  };
-
-  return normalizeCreativeDirectorAnalysis(parsed);
 }
 
 async function generateAdBackgroundPrompt(
@@ -177,10 +191,11 @@ async function generateAdBackgroundPrompt(
           content: `You are a commercial product photographer writing ONE Photoroom background.prompt for a social-media ad shoot.
 
 Rules:
-- Describe ONLY the set: surface, realistic matching props, visible detailed background, lighting direction, and soft contact shadow.
+- Describe ONLY the set: surface, realistic matching props, visible detailed background, lighting direction.
+- Product must look PLANTED on the surface (not floating/tilted). Mention a clear table/counter contact plane.
 - No hands, no people, no brand names, no logos, no watermarks.
 - Product text/packaging must remain sharp and readable. ${analysis.logo_safety_note || ""}
-- Product sits centered and fills about 40% of the frame — leave breathing room around it.
+- Product sits centered and fills about 40% of the frame — generous breathing room around it.
 - Background must be fully detailed and visible (no blur, no bokeh, no empty gradient).
 - Subject pose context: ${blueprint?.subject_pose || "upright"}.
 - Category: ${analysis.detected_category || analysis.product_type}.
@@ -215,71 +230,68 @@ Write the Photoroom background prompt now.`,
   return prompt.replace(/^["']|["']$/g, "");
 }
 
-async function callPhotoroomEdit(
-  fields: Record<string, string>,
-): Promise<Buffer> {
-  const form = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
-    form.append(key, value);
-  }
+/**
+ * Execute Photoroom with blueprint fields.
+ * Retry ladder: full overrides → no textRemoval → no shadow overrides → minimal.
+ */
+async function renderWithBlueprint(options: {
+  mode: StudioEngineMode;
+  blueprint: StudioApiBlueprint;
+  imageUrl: string;
+  cutoutPng: Buffer | null;
+  backgroundPrompt?: string;
+}): Promise<Buffer> {
+  const { mode, blueprint, imageUrl, cutoutPng, backgroundPrompt } = options;
 
-  const response = await fetch(PHOTOROOM_EDIT_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": getPhotoroomApiKey(),
-      "pr-ai-background-model-version": "3",
-    },
-    body: form,
+  const primary = blueprintToPhotoroomFields(blueprint, {
+    mode,
+    imageUrl: cutoutPng ? undefined : imageUrl,
+    backgroundPrompt,
+    applyShadowOverrides: true,
   });
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Photoroom ${getPhotoroomMode()} error ${response.status}: ${detail || response.statusText}`,
-    );
+  const withoutTextRemoval = { ...primary };
+  delete withoutTextRemoval["textRemoval.mode"];
+
+  const withoutShadow: Record<string, string> = { ...withoutTextRemoval };
+  delete withoutShadow["shadow.mode"];
+  delete withoutShadow["shadow.subjectPoseOverride"];
+  delete withoutShadow["shadow.directionOverride"];
+  delete withoutShadow["shadow.intensityOverride"];
+  delete withoutShadow["shadow.softnessOverride"];
+
+  const minimal: Record<string, string> = {
+    removeBackground: "true",
+    padding: String(blueprint.padding),
+    outputSize: blueprint.output_size || "1000x1000",
+    "export.format": "png",
+  };
+  if (!cutoutPng) minimal.imageUrl = imageUrl;
+  if (mode === "catalog") {
+    minimal["background.color"] = blueprint.canvas_bg_color || "FFFFFF";
+  } else if (backgroundPrompt) {
+    minimal["background.prompt"] = backgroundPrompt.slice(0, 220);
   }
 
-  return Buffer.from(await response.arrayBuffer());
-}
+  const attempts = [primary, withoutTextRemoval, withoutShadow, minimal];
 
-async function callPhotoroomEditSafe(
-  primary: Record<string, string>,
-  fallback?: Record<string, string>,
-): Promise<Buffer> {
-  try {
-    return await callPhotoroomEdit(primary);
-  } catch (error) {
-    console.error("Photoroom primary call failed:", error);
-    if (!fallback) throw error;
-    console.warn("Retrying Photoroom with safer parameters…");
-    return callPhotoroomEdit(fallback);
+  let lastError: unknown;
+  for (const fields of attempts) {
+    try {
+      return await editImageFromFields(
+        fields,
+        cutoutPng ?? undefined,
+        "product.png",
+      );
+    } catch (error) {
+      lastError = error;
+      console.error("Photoroom attempt failed, trying safer payload:", error);
+    }
   }
-}
 
-function appendBlueprintEnhancements(
-  fields: Record<string, string>,
-  blueprint: StudioApiBlueprint,
-  opts?: { allowShadow?: boolean; allowBeautify?: boolean },
-): Record<string, string> {
-  const next = { ...fields };
-  next.padding = String(blueprint.padding);
-  next.outputSize = blueprint.output_size;
-  next["export.format"] = "png";
-
-  if (opts?.allowBeautify !== false && blueprint.enable_beautify) {
-    next["beautify.mode"] = "ai.auto";
-  }
-  if (blueprint.enable_relighting) {
-    next["lighting.mode"] = "ai.auto";
-  }
-  if (blueprint.requires_uncrop) {
-    next["uncrop.mode"] = "ai.auto";
-  }
-  if (opts?.allowShadow && blueprint.shadow_direction) {
-    // Solid-canvas catalog only — AI backgrounds already include shadows
-    next["shadow.mode"] = "ai.soft";
-  }
-  return next;
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Photoroom render failed after retries");
 }
 
 function buildMarketing(
@@ -330,10 +342,8 @@ export async function processStudioRequest(
   }
 
   const blueprint = director.api_blueprint;
-  let workingImageUrl = imageUrl;
   let cutoutPng: Buffer | null = null;
 
-  // Rule 3 — isolate main product when hands/clutter overlap
   if (blueprint.requires_pre_cutout) {
     cutoutPng = await diecutImage({
       imageUrl,
@@ -342,73 +352,17 @@ export async function processStudioRequest(
   }
 
   let backgroundPrompt: string | null = null;
-  let png: Buffer;
-
-  if (mode === "catalog") {
-    const canvas = blueprint.canvas_bg_color || "FFFFFF";
-    const primary = appendBlueprintEnhancements(
-      {
-        removeBackground: "true",
-        "background.color": canvas,
-      },
-      blueprint,
-      { allowShadow: true, allowBeautify: true },
-    );
-
-    if (cutoutPng) {
-      png = await callPhotoroomWithOptionalFile(
-        primary,
-        cutoutPng,
-        {
-          imageUrl: workingImageUrl,
-          removeBackground: "true",
-          "background.color": canvas,
-          padding: String(blueprint.padding),
-        },
-      );
-    } else {
-      primary.imageUrl = workingImageUrl;
-      png = await callPhotoroomEditSafe(primary, {
-        imageUrl: workingImageUrl,
-        removeBackground: "true",
-        "background.color": canvas,
-        padding: String(blueprint.padding),
-      });
-    }
-  } else {
+  if (mode === "ad") {
     backgroundPrompt = await generateAdBackgroundPrompt(analysis, userVibeText);
-    // AI backgrounds already include contact shadows — do NOT set shadow.mode
-    const primary = appendBlueprintEnhancements(
-      {
-        removeBackground: "true",
-        "background.prompt": backgroundPrompt,
-        "expandPrompt.mode": "ai.auto",
-      },
-      blueprint,
-      { allowShadow: false, allowBeautify: true },
-    );
-
-    if (cutoutPng) {
-      png = await callPhotoroomWithOptionalFile(
-        primary,
-        cutoutPng,
-        {
-          imageUrl: workingImageUrl,
-          removeBackground: "true",
-          "background.prompt": backgroundPrompt.slice(0, 220),
-          padding: String(blueprint.padding),
-        },
-      );
-    } else {
-      primary.imageUrl = workingImageUrl;
-      png = await callPhotoroomEditSafe(primary, {
-        imageUrl: workingImageUrl,
-        removeBackground: "true",
-        "background.prompt": backgroundPrompt.slice(0, 220),
-        padding: String(blueprint.padding),
-      });
-    }
   }
+
+  const png = await renderWithBlueprint({
+    mode,
+    blueprint,
+    imageUrl,
+    cutoutPng,
+    backgroundPrompt: backgroundPrompt ?? undefined,
+  });
 
   const outputUrl = uploadUserId
     ? await uploadOutputPng(uploadUserId, png)
@@ -426,48 +380,4 @@ export async function processStudioRequest(
     backgroundPrompt,
     photoroomMode: getPhotoroomMode(),
   };
-}
-
-async function callPhotoroomWithOptionalFile(
-  primary: Record<string, string>,
-  imageFile: Buffer,
-  fallbackFields: Record<string, string>,
-): Promise<Buffer> {
-  try {
-    const form = new FormData();
-    form.append(
-      "imageFile",
-      new Blob([new Uint8Array(imageFile)]),
-      "product.png",
-    );
-    for (const [key, value] of Object.entries(primary)) {
-      if (key === "imageUrl") continue;
-      form.append(key, value);
-    }
-
-    const response = await fetch(PHOTOROOM_EDIT_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": getPhotoroomApiKey(),
-        "pr-ai-background-model-version": "3",
-      },
-      body: form,
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(
-        `Photoroom ${getPhotoroomMode()} error ${response.status}: ${detail || response.statusText}`,
-      );
-    }
-
-    return Buffer.from(await response.arrayBuffer());
-  } catch (error) {
-    console.error("Photoroom file call failed, retrying fallback:", error);
-    const fields = { ...fallbackFields };
-    if (!fields.imageUrl) {
-      throw error;
-    }
-    return callPhotoroomEdit(fields);
-  }
 }
