@@ -286,22 +286,24 @@ export const QUALITY_PRESETS: Record<
     id: "standard",
     label: "Standard",
     description: "Fast, great for WhatsApp",
-    padding: 0.12,
-    promptSuffix: "high quality product photo",
+    padding: 0.22,
+    promptSuffix: "high quality product photo, product not filling the whole frame",
   },
   hd: {
     id: "hd",
     label: "HD",
     description: "Sharper detail & spacing",
-    padding: 0.1,
-    promptSuffix: "high resolution sharp commercial product photography",
+    padding: 0.24,
+    promptSuffix:
+      "high resolution sharp commercial product photography, generous space around product",
   },
   ultra: {
     id: "ultra",
     label: "Ultra HD",
     description: "Premium catalog quality",
-    padding: 0.08,
-    promptSuffix: "ultra sharp premium catalog photography, maximum detail",
+    padding: 0.26,
+    promptSuffix:
+      "ultra sharp premium catalog photography, wide lifestyle framing with visible environment",
   },
 };
 

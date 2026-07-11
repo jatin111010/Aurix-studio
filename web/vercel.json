@@ -3,6 +3,9 @@
     "src/app/api/generate/route.ts": {
       "maxDuration": 120
     },
+    "src/app/api/process-studio-request/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/webhooks/whatsapp/route.ts": {
       "maxDuration": 300
     }

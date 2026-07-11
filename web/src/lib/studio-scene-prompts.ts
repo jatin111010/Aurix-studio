@@ -16,7 +16,7 @@ import {
 } from "@/lib/studio-options";
 
 const PHOTOROOM_SUFFIX =
-  "professional commercial product photoshoot, photorealistic, sharp focus throughout, background fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, packaging text sharp and readable, looks like a real photographer shot this, no AI blur, no empty gradient backdrop, no hands, no watermarks";
+  "professional commercial product photoshoot, photorealistic, product occupies about 40 percent of the frame with generous empty table and environment around it, do not fill the whole image with the product, background and props fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, packaging text sharp and readable, looks like a real photographer shot this, no AI blur, no empty gradient backdrop, no hands, no watermarks";
 
 export type ProductScenePlan = {
   label: string;
@@ -28,9 +28,12 @@ export type ProductScenePlan = {
 };
 
 const MOOD_SUFFIX = {
-  classic: "centered hero product composition, camera at eye level",
-  elevated: "slightly elevated three-quarter view, generous table space around product",
-  dramatic: "rich contrast lighting, premium advertising composition",
+  classic:
+    "hero product centered but small in frame, wide visible table surface around it, camera at eye level",
+  elevated:
+    "slightly elevated three-quarter view, product covers less than half the frame, generous environment space",
+  dramatic:
+    "premium advertising composition, product as hero but not oversized, rich visible set around it",
 } as const;
 
 const MOODS: Array<keyof typeof MOOD_SUFFIX> = ["classic", "elevated", "dramatic"];
@@ -159,25 +162,29 @@ Write 3 DIFFERENT full photoshoot scenes. Each "scene" must include ALL of:
    Example for raisins/dry fruits: small ceramic bowl of cashews, scattered almonds, linen napkin
    Example for cosmetics: cotton pads, tiny flower vase, glass dropper bottle
    Example for spices: wooden spoon, spice jar, cutting board
+   Example for luxury gift box: candles, small plant, ribbon, marble table space around the box
 3. Visible background details (wall, window, shelf, tiles) — SHARP and readable, NOT blurry, NOT bokeh, NOT empty gradient
 4. Lighting direction and quality (e.g. soft morning window light from the left, softbox key light, warm afternoon side light)
 5. Natural contact shadow under the product
+6. Framing / placement: product is the hero but covers only about 35–45% of the frame — leave generous visible table + props + background around it. Never say "fill the frame", "close-up crop", or "product dominates the image".
 
 Hard rules:
 - Background and props must be VISIBLE and detailed — never say blur, bokeh, shallow depth of field, out of focus, or soft background
-- Props must relate to the actual product (food → food props, beauty → vanity props)
+- Props must relate to the actual product (food → food props, beauty → vanity props, gift box → candles/plant/ribbon)
 - Product stays the hero; props sit beside/behind, never covering packaging text
+- Product must NOT cover the whole image — wide lifestyle photoshoot framing with breathing room
+- First understand what the product is, how it should sit (open box / upright bottle / flat pouch), and where it belongs in a real shoot
 - Sound like a real Indian commercial photoshoot (home kitchen, kirana display, festive gift table, boutique counter when relevant)
-- 45–70 words per scene
+- 50–80 words per scene
 - Do NOT mention brand names, logos, watermarks, people, or hands
 
-Also return productClarity: how the main product itself should look (upright, sharp label, etc.)
+Also return productClarity: how the main product itself should look AND how large it should be in frame.
 
 Return JSON only:
 {
-  "productClarity": "one sentence about product presentation",
+  "productClarity": "one sentence: product presentation + occupies about 40% of frame with space around it",
   "scenes": [
-    { "label": "2-4 word set name", "scene": "full photoshoot description with surface + visible props + visible background + lighting + shadow" },
+    { "label": "2-4 word set name", "scene": "full photoshoot description with surface + visible props + visible background + lighting + shadow + wide framing" },
     { "label": "...", "scene": "..." },
     { "label": "...", "scene": "..." }
   ]
@@ -188,7 +195,7 @@ Return JSON only:
             content: [
               {
                 type: "text",
-                text: "Look at this product. Write 3 professional photoshoot prompts with visible backgrounds, matching props, lighting, and shadows — like a real commercial shoot, not a blurry AI background.",
+                text: "Look at this product carefully. Understand what it is, how it should be placed, and write 3 professional wide-frame photoshoot prompts. Product should cover about 40% of the image — not the whole frame — with visible props, lighting, shadows, and background.",
               },
               { type: "image_url", image_url: { url: imageUrl } },
             ],
@@ -222,7 +229,7 @@ Return JSON only:
     const clarity =
       parsed.productClarity?.trim() ||
       analysis.productClarity ||
-      "main product upright and centered, packaging sharp and readable, no clutter on the product itself";
+      "main product upright and centered, packaging sharp and readable, product covers about 40% of the frame with space around it";
 
     return scenes.slice(0, 3).map((s, i) => ({
       label: (s.label ?? `Scene ${i + 1}`).slice(0, 32),

@@ -21,12 +21,15 @@ import {
 } from "@/lib/studio-scene-prompts";
 
 const BASE_SUFFIX =
-  "professional commercial product photoshoot, photorealistic, sharp focus throughout, background fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, looks like a real photographer shot this";
+  "professional commercial product photoshoot, photorealistic, product occupies about 40 percent of the frame with generous environment around it, background fully visible and detailed not blurred, natural soft contact shadow under the product, realistic studio lighting, looks like a real photographer shot this";
 
 const MOOD_MODIFIERS = {
-  classic: "centered hero product composition, camera at eye level",
-  elevated: "slightly elevated three-quarter view, generous table space around product",
-  dramatic: "rich contrast lighting, premium advertising composition",
+  classic:
+    "hero product centered but small in frame, wide visible table surface around it",
+  elevated:
+    "slightly elevated three-quarter view, product covers less than half the frame",
+  dramatic:
+    "premium advertising composition, product as hero but not oversized",
 } as const;
 
 export type VariationPlan = {
@@ -150,8 +153,8 @@ export async function buildVariationPlans(
         i === 0
           ? quality.padding
           : i === 1
-            ? Math.max(0.1, quality.padding - 0.01)
-            : Math.min(0.14, quality.padding + 0.01);
+            ? Math.max(0.2, quality.padding - 0.02)
+            : Math.min(0.28, quality.padding + 0.02);
 
       return {
         label,
@@ -182,8 +185,8 @@ export async function buildVariationPlans(
       i === 0
         ? quality.padding
         : i === 1
-          ? Math.max(0.1, quality.padding - 0.01)
-          : Math.min(0.14, quality.padding + 0.01);
+          ? Math.max(0.2, quality.padding - 0.02)
+          : Math.min(0.28, quality.padding + 0.02);
 
     return {
       label,

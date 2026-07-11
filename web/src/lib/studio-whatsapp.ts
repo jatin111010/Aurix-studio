@@ -9,6 +9,7 @@ import { analyzeProduct, type ProductAnalysis } from "@/lib/studio-analysis";
 import {
   buildStudioVariationsProgressive,
   saveStudioSet,
+  StudioUnusableError,
   type BuiltStudioSet,
 } from "@/lib/studio-generation";
 import {
@@ -258,6 +259,7 @@ async function runStudioGeneration(
           );
         }
       },
+      { uploadUserId: userId },
     );
 
     await saveStudioSet(userId, inputImageUrl, built, credit);
@@ -269,6 +271,14 @@ async function runStudioGeneration(
         choices,
       });
       await sendPaywallMessage(to, userId, lang);
+      return;
+    }
+    if (error instanceof StudioUnusableError) {
+      await updateConversation(conversationId, {
+        step: studioGenerationErrorStep(choices),
+        choices,
+      });
+      await sendText(to, error.guidance);
       return;
     }
     console.error("Studio generation failed", error);

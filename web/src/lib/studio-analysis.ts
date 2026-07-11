@@ -88,7 +88,7 @@ const FALLBACK: ProductAnalysis = {
   mainProduct: "the main packaged product in the photo",
   photoIssues: ["phone photo may include clutter or awkward framing"],
   productClarity:
-    "center the main product, keep packaging text sharp and readable, remove clutter",
+    "center the main product upright, keep packaging sharp, product covers about 40% of the frame with space around it",
   isolateFirst: true,
 };
 
@@ -138,7 +138,7 @@ Return JSON only:
   "photoQuality": "clean|messy|cluttered",
   "mainProduct": "short phrase naming only the main sellable item to keep, e.g. green GroAurum raisins box",
   "photoIssues": ["up to 4 short issues, e.g. cluttered table, tilted angle, busy background, hand in frame"],
-  "productClarity": "one sentence: how to present the main product clearly — upright, centered, sharp label, no clutter",
+  "productClarity": "one sentence: how to present the main product clearly — upright, centered, sharp label, covers about 40% of frame with space around it, no clutter",
   "isolateFirst": true
 }
 
