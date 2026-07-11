@@ -2,11 +2,20 @@
  * Core Studio Engine — shared by WhatsApp + POST /api/process-studio-request
  *
  * Modes:
- *  - catalog → pure white ecommerce packshot
+ *  - catalog → solid canvas packshot (blueprint-driven)
  *  - ad      → GPT-4o vibe prompt → Photoroom AI background (model v3)
+ *
+ * Step 1 always runs the 14-point Master Creative Director analysis.
  */
 
-import { getPhotoroomApiKey, getPhotoroomMode } from "@/lib/photoroom";
+import {
+  CREATIVE_DIRECTOR_SYSTEM_PROMPT,
+  CREATIVE_DIRECTOR_USER_TEXT,
+  normalizeCreativeDirectorAnalysis,
+  type CreativeDirectorAnalysis,
+  type StudioApiBlueprint,
+} from "@/lib/studio-analysis-prompt";
+import { diecutImage, getPhotoroomApiKey, getPhotoroomMode } from "@/lib/photoroom";
 import { uploadOutputPng } from "@/lib/storage";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -14,12 +23,17 @@ const PHOTOROOM_EDIT_URL = "https://image-api.photoroom.com/v2/edit";
 
 export type StudioEngineMode = "catalog" | "ad";
 
+/** Back-compat shape used by WhatsApp / API responses */
 export type StudioEngineAnalysis = {
   product_name: string;
   product_type: string;
   image_issues: string[];
   user_guidance: string;
   is_usable: boolean;
+  detected_category?: string;
+  logo_safety_note?: string;
+  api_blueprint?: StudioApiBlueprint;
+  director?: CreativeDirectorAnalysis;
 };
 
 export type StudioEngineMarketing = {
@@ -63,7 +77,36 @@ function requireOpenAiKey(): string {
   return key;
 }
 
-async function analyzeProduct(imageUrl: string): Promise<StudioEngineAnalysis> {
+function toEngineAnalysis(
+  director: CreativeDirectorAnalysis,
+): StudioEngineAnalysis {
+  const issues: string[] = [];
+  if (director.api_blueprint.requires_pre_cutout) {
+    issues.push("hands or clutter near product — pre-cutout required");
+  }
+  if (director.api_blueprint.requires_uncrop) {
+    issues.push("product edge clipped — uncrop recommended");
+  }
+
+  return {
+    product_name: director.product_name,
+    product_type: director.detected_category,
+    image_issues: issues,
+    user_guidance: director.user_guidance,
+    is_usable: director.is_usable,
+    detected_category: director.detected_category,
+    logo_safety_note: director.logo_safety_note,
+    api_blueprint: director.api_blueprint,
+    director,
+  };
+}
+
+/**
+ * STEP 1 — Master AI Creative Director (14-point checklist → JSON blueprint)
+ */
+async function analyzeProductWithCreativeDirector(
+  imageUrl: string,
+): Promise<CreativeDirectorAnalysis> {
   const response = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -74,33 +117,16 @@ async function analyzeProduct(imageUrl: string): Promise<StudioEngineAnalysis> {
       model: "gpt-4o",
       response_format: { type: "json_object" },
       temperature: 0.2,
-      max_tokens: 500,
+      max_tokens: 700,
       messages: [
         {
           role: "system",
-          content: `You are an e-commerce product staging analyst for Indian WhatsApp sellers.
-
-Analyze the product photo and return ONLY a clean JSON object with these exact keys:
-{
-  "product_name": "short name of the main sellable product",
-  "product_type": "category like dry fruits gift box, cosmetic bottle, snack pack, etc.",
-  "image_issues": ["up to 4 short issues, or empty array if clean"],
-  "user_guidance": "one short line in simple Indian English — e.g. 'Looks good!' or 'Image is a bit dark, try taking it in daylight!'",
-  "is_usable": true
-}
-
-Rules:
-- Focus on the MAIN product only (ignore clutter, hands, messy background when judging usability).
-- is_usable=false only if the product is unreadable, fully cut off, extremely dark, or not a product photo.
-- user_guidance must always be friendly and short.`,
+          content: CREATIVE_DIRECTOR_SYSTEM_PROMPT,
         },
         {
           role: "user",
           content: [
-            {
-              type: "text",
-              text: "Analyze this product photo for e-commerce studio staging.",
-            },
+            { type: "text", text: CREATIVE_DIRECTOR_USER_TEXT },
             { type: "image_url", image_url: { url: imageUrl } },
           ],
         },
@@ -119,19 +145,11 @@ Rules:
   const raw = json.choices?.[0]?.message?.content;
   if (!raw) throw new Error("OpenAI analysis returned an empty response");
 
-  const parsed = JSON.parse(raw) as Partial<StudioEngineAnalysis>;
-
-  return {
-    product_name: String(parsed.product_name || "product").slice(0, 120),
-    product_type: String(parsed.product_type || "general").slice(0, 80),
-    image_issues: Array.isArray(parsed.image_issues)
-      ? parsed.image_issues.slice(0, 4).map(String)
-      : [],
-    user_guidance: String(
-      parsed.user_guidance || "Looks good! Preparing your studio shot…",
-    ).slice(0, 180),
-    is_usable: Boolean(parsed.is_usable),
+  const parsed = JSON.parse(raw) as Partial<CreativeDirectorAnalysis> & {
+    api_blueprint?: Partial<StudioApiBlueprint>;
   };
+
+  return normalizeCreativeDirectorAnalysis(parsed);
 }
 
 async function generateAdBackgroundPrompt(
@@ -139,6 +157,9 @@ async function generateAdBackgroundPrompt(
   userVibeText?: string,
 ): Promise<string> {
   const vibe = (userVibeText || "").trim().slice(0, 160);
+  const blueprint = analysis.api_blueprint;
+  const festiveGuard =
+    "For festive sets: unlit brass diyas and loose marigold petals only — never open flames or fire near packaging.";
 
   const response = await fetch(OPENAI_URL, {
     method: "POST",
@@ -158,9 +179,12 @@ async function generateAdBackgroundPrompt(
 Rules:
 - Describe ONLY the set: surface, realistic matching props, visible detailed background, lighting direction, and soft contact shadow.
 - No hands, no people, no brand names, no logos, no watermarks.
-- Product text/packaging must remain sharp and readable.
+- Product text/packaging must remain sharp and readable. ${analysis.logo_safety_note || ""}
 - Product sits centered and fills about 40% of the frame — leave breathing room around it.
 - Background must be fully detailed and visible (no blur, no bokeh, no empty gradient).
+- Subject pose context: ${blueprint?.subject_pose || "upright"}.
+- Category: ${analysis.detected_category || analysis.product_type}.
+- ${festiveGuard}
 - Output ONE paragraph only (50–80 words). No JSON. No quotes around the whole answer.`,
         },
         {
@@ -218,7 +242,6 @@ async function callPhotoroomEdit(
   return Buffer.from(await response.arrayBuffer());
 }
 
-/** Try primary fields; on failure retry with a safer minimal set. */
 async function callPhotoroomEditSafe(
   primary: Record<string, string>,
   fallback?: Record<string, string>,
@@ -231,6 +254,32 @@ async function callPhotoroomEditSafe(
     console.warn("Retrying Photoroom with safer parameters…");
     return callPhotoroomEdit(fallback);
   }
+}
+
+function appendBlueprintEnhancements(
+  fields: Record<string, string>,
+  blueprint: StudioApiBlueprint,
+  opts?: { allowShadow?: boolean; allowBeautify?: boolean },
+): Record<string, string> {
+  const next = { ...fields };
+  next.padding = String(blueprint.padding);
+  next.outputSize = blueprint.output_size;
+  next["export.format"] = "png";
+
+  if (opts?.allowBeautify !== false && blueprint.enable_beautify) {
+    next["beautify.mode"] = "ai.auto";
+  }
+  if (blueprint.enable_relighting) {
+    next["lighting.mode"] = "ai.auto";
+  }
+  if (blueprint.requires_uncrop) {
+    next["uncrop.mode"] = "ai.auto";
+  }
+  if (opts?.allowShadow && blueprint.shadow_direction) {
+    // Solid-canvas catalog only — AI backgrounds already include shadows
+    next["shadow.mode"] = "ai.soft";
+  }
+  return next;
 }
 
 function buildMarketing(
@@ -268,7 +317,8 @@ export async function processStudioRequest(
     throw new Error('mode must be "catalog" or "ad"');
   }
 
-  const analysis = await analyzeProduct(imageUrl);
+  const director = await analyzeProductWithCreativeDirector(imageUrl);
+  const analysis = toEngineAnalysis(director);
 
   if (!analysis.is_usable) {
     return {
@@ -279,45 +329,85 @@ export async function processStudioRequest(
     };
   }
 
+  const blueprint = director.api_blueprint;
+  let workingImageUrl = imageUrl;
+  let cutoutPng: Buffer | null = null;
+
+  // Rule 3 — isolate main product when hands/clutter overlap
+  if (blueprint.requires_pre_cutout) {
+    cutoutPng = await diecutImage({
+      imageUrl,
+      padding: 0.03,
+    });
+  }
+
   let backgroundPrompt: string | null = null;
   let png: Buffer;
 
   if (mode === "catalog") {
-    // White packshot — soft shadow OK on solid color backgrounds
-    png = await callPhotoroomEditSafe(
+    const canvas = blueprint.canvas_bg_color || "FFFFFF";
+    const primary = appendBlueprintEnhancements(
       {
-        imageUrl,
         removeBackground: "true",
-        "background.color": "FFFFFF",
-        padding: "0.15",
-        "shadow.mode": "ai.soft",
+        "background.color": canvas,
       },
-      {
-        imageUrl,
-        removeBackground: "true",
-        "background.color": "FFFFFF",
-        padding: "0.15",
-      },
+      blueprint,
+      { allowShadow: true, allowBeautify: true },
     );
+
+    if (cutoutPng) {
+      png = await callPhotoroomWithOptionalFile(
+        primary,
+        cutoutPng,
+        {
+          imageUrl: workingImageUrl,
+          removeBackground: "true",
+          "background.color": canvas,
+          padding: String(blueprint.padding),
+        },
+      );
+    } else {
+      primary.imageUrl = workingImageUrl;
+      png = await callPhotoroomEditSafe(primary, {
+        imageUrl: workingImageUrl,
+        removeBackground: "true",
+        "background.color": canvas,
+        padding: String(blueprint.padding),
+      });
+    }
   } else {
     backgroundPrompt = await generateAdBackgroundPrompt(analysis, userVibeText);
-    // AI backgrounds already include contact shadows — do NOT also set shadow.mode
-    // (Photoroom docs: combining AI background + AI shadow often fails)
-    png = await callPhotoroomEditSafe(
+    // AI backgrounds already include contact shadows — do NOT set shadow.mode
+    const primary = appendBlueprintEnhancements(
       {
-        imageUrl,
         removeBackground: "true",
         "background.prompt": backgroundPrompt,
-        padding: "0.15",
         "expandPrompt.mode": "ai.auto",
       },
-      {
-        imageUrl,
+      blueprint,
+      { allowShadow: false, allowBeautify: true },
+    );
+
+    if (cutoutPng) {
+      png = await callPhotoroomWithOptionalFile(
+        primary,
+        cutoutPng,
+        {
+          imageUrl: workingImageUrl,
+          removeBackground: "true",
+          "background.prompt": backgroundPrompt.slice(0, 220),
+          padding: String(blueprint.padding),
+        },
+      );
+    } else {
+      primary.imageUrl = workingImageUrl;
+      png = await callPhotoroomEditSafe(primary, {
+        imageUrl: workingImageUrl,
         removeBackground: "true",
         "background.prompt": backgroundPrompt.slice(0, 220),
-        padding: "0.15",
-      },
-    );
+        padding: String(blueprint.padding),
+      });
+    }
   }
 
   const outputUrl = uploadUserId
@@ -336,4 +426,48 @@ export async function processStudioRequest(
     backgroundPrompt,
     photoroomMode: getPhotoroomMode(),
   };
+}
+
+async function callPhotoroomWithOptionalFile(
+  primary: Record<string, string>,
+  imageFile: Buffer,
+  fallbackFields: Record<string, string>,
+): Promise<Buffer> {
+  try {
+    const form = new FormData();
+    form.append(
+      "imageFile",
+      new Blob([new Uint8Array(imageFile)]),
+      "product.png",
+    );
+    for (const [key, value] of Object.entries(primary)) {
+      if (key === "imageUrl") continue;
+      form.append(key, value);
+    }
+
+    const response = await fetch(PHOTOROOM_EDIT_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": getPhotoroomApiKey(),
+        "pr-ai-background-model-version": "3",
+      },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `Photoroom ${getPhotoroomMode()} error ${response.status}: ${detail || response.statusText}`,
+      );
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    console.error("Photoroom file call failed, retrying fallback:", error);
+    const fields = { ...fallbackFields };
+    if (!fields.imageUrl) {
+      throw error;
+    }
+    return callPhotoroomEdit(fields);
+  }
 }
