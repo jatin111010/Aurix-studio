@@ -9,9 +9,12 @@
  */
 
 import {
+  AD_BACKGROUND_SYSTEM_PROMPT,
   CREATIVE_DIRECTOR_SYSTEM_PROMPT,
   CREATIVE_DIRECTOR_USER_TEXT,
   blueprintToPhotoroomFields,
+  formatPhotoroomPadding,
+  lockPaddingForSilhouette,
   normalizeCreativeDirectorAnalysis,
   type CreativeDirectorAnalysis,
   type StudioApiBlueprint,
@@ -172,8 +175,12 @@ async function generateAdBackgroundPrompt(
 ): Promise<string> {
   const vibe = (userVibeText || "").trim().slice(0, 160);
   const blueprint = analysis.api_blueprint;
-  const festiveGuard =
-    "For festive sets: unlit brass diyas and loose marigold petals only — never open flames or fire near packaging.";
+  const paddingHint = formatPhotoroomPadding(
+    lockPaddingForSilhouette(
+      blueprint?.silhouette,
+      analysis.product_name,
+    ),
+  );
 
   const response = await fetch(OPENAI_URL, {
     method: "POST",
@@ -183,33 +190,25 @@ async function generateAdBackgroundPrompt(
     },
     body: JSON.stringify({
       model: "gpt-4o",
-      temperature: 0.65,
-      max_tokens: 350,
+      temperature: 0.45,
+      max_tokens: 320,
       messages: [
         {
           role: "system",
-          content: `You are a commercial product photographer writing ONE Photoroom background.prompt for a social-media ad shoot.
-
-Rules:
-- Describe ONLY the set: surface, realistic matching props, visible detailed background, lighting direction.
-- Product must look PLANTED on the surface (not floating/tilted). Mention a clear table/counter contact plane.
-- No hands, no people, no brand names, no logos, no watermarks.
-- Product text/packaging must remain sharp and readable. ${analysis.logo_safety_note || ""}
-- Product sits centered and fills about 40% of the frame — generous breathing room around it.
-- Background must be fully detailed and visible (no blur, no bokeh, no empty gradient).
-- Subject pose context: ${blueprint?.subject_pose || "upright"}.
-- Category: ${analysis.detected_category || analysis.product_type}.
-- ${festiveGuard}
-- Output ONE paragraph only (50–80 words). No JSON. No quotes around the whole answer.`,
+          content: AD_BACKGROUND_SYSTEM_PROMPT,
         },
         {
           role: "user",
           content: `Product: ${analysis.product_name}
-Type: ${analysis.product_type}
+Type / category: ${analysis.detected_category || analysis.product_type}
+Silhouette: ${blueprint?.silhouette || "tall_open_asymmetrical"}
+Subject pose: ${blueprint?.subject_pose || "upright"}
+Composition lock: product ~35–40% of frame; Photoroom padding will be ${paddingHint} so lids must not touch the top border.
+Logo safety: ${analysis.logo_safety_note || "keep packaging text sharp"}
 Issues to fix: ${analysis.image_issues.join("; ") || "none"}
-User vibe: ${vibe || "premium clean commercial look"}
+User vibe: ${vibe || "premium clean commercial marble lifestyle"}
 
-Write the Photoroom background prompt now.`,
+Write ONE Photoroom background.prompt now with exact prop counts and positions only.`,
         },
       ],
     }),
@@ -227,7 +226,21 @@ Write the Photoroom background prompt now.`,
   if (!prompt || prompt.length < 20) {
     throw new Error("OpenAI failed to generate an ad background prompt");
   }
-  return prompt.replace(/^["']|["']$/g, "");
+  return sanitizeLifestylePrompt(prompt.replace(/^["']|["']$/g, ""));
+}
+
+/** Strip generic plural prop wording that causes abstract yellow scatter. */
+function sanitizeLifestylePrompt(prompt: string): string {
+  return prompt
+    .replace(/\bscattered\s+yellow\s+decorations?\b/gi, "three individual orange marigold petals on the front-left")
+    .replace(/\byellow\s+decorations?\b/gi, "three individual orange marigold petals")
+    .replace(/\bmarigolds\b/gi, "three individual orange marigold petals")
+    .replace(/\bcandles\b/gi, "exactly two unlit brass diyas on the right side")
+    .replace(/\bdecorations\b/gi, "two small props")
+    .replace(/\bfestive elements\b/gi, "exactly two unlit brass diyas")
+    .replace(/\babstract\b/gi, "realistic")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -262,9 +275,13 @@ async function renderWithBlueprint(options: {
 
   const minimal: Record<string, string> = {
     removeBackground: "true",
-    padding: String(blueprint.padding),
+    padding: formatPhotoroomPadding(
+      lockPaddingForSilhouette(blueprint.silhouette, undefined),
+    ),
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
+    "lighting.mode": "ai.auto",
+    "textRemoval.mode": "ai.artificial",
   };
   if (!cutoutPng) minimal.imageUrl = imageUrl;
   if (mode === "catalog") {

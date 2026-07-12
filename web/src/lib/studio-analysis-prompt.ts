@@ -5,6 +5,9 @@
 
 export type SubjectPose = "upright" | "flatlay";
 
+/** Compact vs tall/open silhouettes drive locked padding (0.18 vs 0.20). */
+export type ProductSilhouette = "compact" | "tall_open_asymmetrical";
+
 /** Photoroom-native shadow.directionOverride values */
 export type ShadowDirection =
   | "behindLeft"
@@ -19,6 +22,8 @@ export type StudioApiBlueprint = {
   output_size: string;
   padding: number;
   subject_pose: SubjectPose;
+  /** Drives hardcoded padding lock: open lids / tall boxes → 0.20 */
+  silhouette: ProductSilhouette;
   shadow_direction: ShadowDirection | string;
   shadow_intensity: number;
   shadow_softness: number;
@@ -40,11 +45,16 @@ export type CreativeDirectorAnalysis = {
   api_blueprint: StudioApiBlueprint;
 };
 
+/** Locked padding for compact products (still ≤40% frame). */
+export const PADDING_COMPACT = 0.18;
+/** Locked padding for tall / open / asymmetrical silhouettes (open lids). */
+export const PADDING_TALL_OPEN = 0.2;
+
 export const DEFAULT_API_BLUEPRINT: StudioApiBlueprint = {
   output_size: "1000x1000",
-  // Higher padding → smaller product (~40% of frame). 0.15 alone still looked ~75%.
-  padding: 0.2,
+  padding: PADDING_TALL_OPEN,
   subject_pose: "upright",
+  silhouette: "tall_open_asymmetrical",
   shadow_direction: "behindLeft",
   shadow_intensity: 0.5,
   shadow_softness: 0.8,
@@ -55,6 +65,19 @@ export const DEFAULT_API_BLUEPRINT: StudioApiBlueprint = {
   requires_pre_cutout: false,
   export_format: "png",
 };
+
+/**
+ * Strict prop-specificity rules shared by analysis + lifestyle background prompts.
+ * Prevents Photoroom from inventing repetitive abstract yellow circles / clutter.
+ */
+export const PROP_SPECIFICITY_RULES = `STRICT PROP SPECIFICITY (mandatory):
+- NEVER use generic open-ended plurals like "marigolds", "candles", "decorations", "flowers", "props", "accents", "ornaments", "festive elements", "yellow decorations".
+- NEVER invent abstract shapes, circles, dots, blobs, confetti, or repetitive yellow motifs on the table.
+- Every prop must have an EXACT small count (1, 2, or 3) and a CLEAR position (left side, right side, behind product, front-left corner).
+- BAD: "Premium gift display with candles and scattered yellow decorations"
+- GOOD: "Premium lifestyle display on high-end marble surface, featuring exactly two unlit brass diyas placed neatly on the right side, and three individual orange marigold petals elegantly resting near the front-left corner of the table."
+- Prefer a clean surface with at most 2–3 real physical props total.
+- Cultural / festive: only unlit brass diyas and individual marigold petals — never open flames or fire near packaging.`;
 
 /**
  * Complete Master Checklist + precision framing / grounded shadow rules.
@@ -77,23 +100,25 @@ SECTION II: INDUSTRY PRESETS (Indian sectors)
 7. Cosmetics & Personal Care: high-key commercial; enable_beautify true; shadow_direction "behindLeft"; shadow_intensity ~0.45; shadow_softness ~0.85; subject_pose "upright".
 8. Fashion & Apparel: strict color accuracy; if clothing is laid flat set subject_pose "flatlay" and shadow_direction "behind"; otherwise upright.
 9. Jewellery & Accessories: bright specular accents; shadow_direction "behindLeft"; shadow_intensity ~0.4; shadow_softness ~0.7; subject_pose often "flatlay" for small pieces.
-10. Electronics & Gadgets: cool studio lighting; if tiny accessory use padding >= 0.22 so it is not microscopic; subject_pose "upright".
+10. Electronics & Gadgets: cool studio lighting; subject_pose "upright"; silhouette usually "compact".
 
 SECTION III: COMPOSITION, PERSPECTIVE & CANVAS (CRITICAL)
-11. The 40% Framing Rule (anti over-scale): Product must NEVER fill more than ~40% of the final 1000x1000 canvas.
-    - Default padding: 0.20
-    - Tall / vertical boxes: padding 0.18 (still keep breathing room — do NOT use tiny padding)
-    - Never set padding below 0.15
-    - Never set padding above 0.28
-12. Grounded perspective (anti floating): Assume the product sits ON a physical surface with a contact shadow. Prefer upright boxes that look planted, not tilted floating cutouts. Choose shadow_direction that anchors the base (behindLeft / behindRight / behind / BOTTOM_CENTER).
-13. Canvas Contrast Guard: If packaging is primarily white/light, set canvas_bg_color to "F5F5F5" (not pure white) to prevent edge washout.
-14. Smart Ambient Relighting: Set enable_relighting true by default so the product blends into the new scene — but packaging text must remain crisp (logo_safety_note).
-15. Cultural Context Safety: For festive scenes forbid open flames near packaging; use unlit brass diyas and loose marigold petals only.
+11. The 35–40% Framing Rule (anti over-scale): Product (including open lids) must NEVER touch the absolute top/bottom borders and must occupy only ~35–40% of the 1000x1000 canvas.
+    - Set api_blueprint.silhouette = "tall_open_asymmetrical" for open gift boxes, open lids, tall vertical packs, or irregular silhouettes → engine will FORCE padding = 0.20
+    - Set api_blueprint.silhouette = "compact" for closed boxes, bottles, jars → engine will FORCE padding = 0.18
+    - Always also set api_blueprint.padding to 0.20 (tall/open) or 0.18 (compact) to match silhouette — do not invent other padding values
+12. Grounded perspective (anti floating): Product sits ON a physical surface with contact shadow. Not tilted floating cutouts.
+13. Canvas Contrast Guard: If packaging is primarily white/light, set canvas_bg_color to "F5F5F5".
+14. Smart Ambient Relighting: enable_relighting true by default; packaging text must remain crisp.
+15. Cultural Context Safety: festive scenes — unlit brass diyas and individual marigold petals only; no open flames.
 
-shadow_direction MUST be one of these Photoroom-native values when possible:
+${PROP_SPECIFICITY_RULES}
+
+shadow_direction MUST be one of:
 "behindLeft" | "behindRight" | "behind" | "left" | "right" | "BOTTOM_CENTER" | "CENTER"
 
-subject_pose MUST be "upright" (boxes, bottles, vertical packs) or "flatlay" (laid-flat garments/jewelry).
+subject_pose MUST be "upright" or "flatlay".
+silhouette MUST be "compact" or "tall_open_asymmetrical".
 
 Hard output rules:
 - Return STRICT JSON only. No markdown, no code fences, no commentary outside the JSON object.
@@ -102,7 +127,6 @@ Hard output rules:
 - api_blueprint.output_size = "1000x1000"
 - api_blueprint.export_format = "png"
 - shadow_intensity and shadow_softness are floats from 0.0 to 1.0
-- padding is a float (default 0.20) enforcing ≤40% product frame occupancy
 
 Output strictly as a JSON object with this shape:
 {
@@ -113,7 +137,8 @@ Output strictly as a JSON object with this shape:
   "logo_safety_note": "string",
   "api_blueprint": {
     "output_size": "1000x1000",
-    "padding": number,
+    "padding": 0.18,
+    "silhouette": "compact|tall_open_asymmetrical",
     "subject_pose": "upright|flatlay",
     "shadow_direction": "behindLeft|behindRight|behind|left|right|BOTTOM_CENTER|CENTER",
     "shadow_intensity": number,
@@ -128,7 +153,24 @@ Output strictly as a JSON object with this shape:
 }`;
 
 export const CREATIVE_DIRECTOR_USER_TEXT =
-  "Analyze this merchant product photo as a precision commercial photographer. Enforce ≤40% product framing, grounded contact shadows (not floating), and sharp packaging text. Return the Photoroom api_blueprint as strict JSON only.";
+  "Analyze this merchant product photo as a precision commercial photographer. Detect if the silhouette is tall/open/asymmetrical (e.g. open gift box lid). Enforce 35–40% framing with locked padding 0.18 or 0.20, grounded shadows, sharp packaging text. Return strict JSON only.";
+
+/**
+ * Lifestyle / ad background prompt writer — exact counts & positions only.
+ */
+export const AD_BACKGROUND_SYSTEM_PROMPT = `You are a commercial product photographer writing ONE Photoroom background.prompt for an Indian e-commerce social shoot.
+
+Rules:
+- Describe ONLY the environment: surface material, 1–3 precise props, visible detailed background, lighting direction.
+- Product must look PLANTED on the surface (not floating/tilted). Mention a clear table/counter contact plane.
+- Product centered, occupying about 35–40% of the frame with generous empty margin so lids/tops never touch the frame border.
+- Background fully detailed and visible — no blur, no bokeh, no empty gradient.
+- No hands, people, brand names, logos, watermarks, or abstract generative shapes.
+- No repetitive yellow circles, dots, blobs, confetti, or random decorative scatter.
+
+${PROP_SPECIFICITY_RULES}
+
+Output ONE paragraph only (55–85 words). No JSON. No quotes around the whole answer.`;
 
 /** Map creative-director directions to Photoroom shadow.directionOverride values. */
 export function mapShadowDirectionOverride(direction: string): string {
@@ -149,9 +191,36 @@ export function mapShadowDirectionOverride(direction: string): string {
   return map[key] || "behindLeft";
 }
 
-/** Photoroom subjectPoseOverride expects upright/flatlay-compatible values. */
 export function mapSubjectPoseOverride(pose: SubjectPose): string {
   return pose === "flatlay" ? "flatlay" : "upright";
+}
+
+/**
+ * Hard-lock padding so tall/open lids never touch frame borders.
+ * compact → 0.18 | tall_open_asymmetrical → 0.20
+ * Never trust model-invented padding for final Photoroom calls.
+ */
+export function lockPaddingForSilhouette(
+  silhouette: ProductSilhouette | string | undefined,
+  productNameHint?: string,
+): number {
+  const hint = `${silhouette ?? ""} ${productNameHint ?? ""}`.toLowerCase();
+  const looksTallOpen =
+    silhouette === "tall_open_asymmetrical" ||
+    /\b(open|lid|gift\s*box|hamper|tall|asymmetr)/i.test(hint);
+
+  return looksTallOpen ? PADDING_TALL_OPEN : PADDING_COMPACT;
+}
+
+/** Format padding for Photoroom multipart — fixed 2 decimals, never empty. */
+export function formatPhotoroomPadding(padding: number): string {
+  const locked =
+    padding === PADDING_COMPACT || padding === PADDING_TALL_OPEN
+      ? padding
+      : padding >= 0.19
+        ? PADDING_TALL_OPEN
+        : PADDING_COMPACT;
+  return locked.toFixed(2);
 }
 
 /** Clamp / normalize model JSON into a safe blueprint for Photoroom. */
@@ -162,14 +231,14 @@ export function normalizeCreativeDirectorAnalysis(
 ): CreativeDirectorAnalysis {
   const bp: Partial<StudioApiBlueprint> = raw.api_blueprint ?? {};
 
-  // Enforce breathing room: min 0.15, prefer ~0.20 so product ≤ ~40% of frame
-  const padding =
-    typeof bp.padding === "number" && Number.isFinite(bp.padding)
-      ? Math.min(0.28, Math.max(0.15, bp.padding))
-      : DEFAULT_API_BLUEPRINT.padding;
-
   const pose: SubjectPose =
     bp.subject_pose === "flatlay" ? "flatlay" : "upright";
+
+  const silhouette: ProductSilhouette =
+    bp.silhouette === "compact" ? "compact" : "tall_open_asymmetrical";
+
+  // Engine authority: overwrite any model padding with locked 0.18 / 0.20
+  const padding = lockPaddingForSilhouette(silhouette, String(raw.product_name || ""));
 
   const canvas = String(bp.canvas_bg_color || "FFFFFF")
     .replace("#", "")
@@ -197,6 +266,7 @@ export function normalizeCreativeDirectorAnalysis(
     api_blueprint: {
       output_size: "1000x1000",
       padding,
+      silhouette,
       subject_pose: pose,
       shadow_direction: shadowDirection,
       shadow_intensity:
@@ -220,7 +290,7 @@ export function normalizeCreativeDirectorAnalysis(
 
 /**
  * Build Photoroom multipart field map from api_blueprint.
- * Skips empty values. Uses advanced shadow overrides + premium headers (applied separately).
+ * Padding is always re-locked and formatted to avoid overwrite / stringify bugs.
  */
 export function blueprintToPhotoroomFields(
   blueprint: StudioApiBlueprint,
@@ -232,9 +302,20 @@ export function blueprintToPhotoroomFields(
     applyShadowOverrides?: boolean;
   },
 ): Record<string, string> {
+  const lockedPadding = lockPaddingForSilhouette(
+    blueprint.silhouette,
+    undefined,
+  );
+  // Prefer blueprint.padding only if it already matches a lock value
+  const paddingValue =
+    blueprint.padding === PADDING_COMPACT ||
+    blueprint.padding === PADDING_TALL_OPEN
+      ? blueprint.padding
+      : lockedPadding;
+
   const fields: Record<string, string> = {
     removeBackground: "true",
-    padding: String(blueprint.padding),
+    padding: formatPhotoroomPadding(paddingValue),
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
   };
@@ -247,15 +328,13 @@ export function blueprintToPhotoroomFields(
     fields["background.color"] = blueprint.canvas_bg_color || "FFFFFF";
   } else if (options.backgroundPrompt?.trim()) {
     fields["background.prompt"] = options.backgroundPrompt.trim();
+    // Keep expand, but prop-specific prompt already forbids abstract clutter
     fields["expandPrompt.mode"] = "ai.auto";
   }
 
-  // Preserve packaging text sharpness — avoid aggressive recolor bleed
+  // Production polish: always bind lighting.mode = ai.auto when relighting
   if (blueprint.enable_relighting) {
-    fields["lighting.mode"] =
-      options.mode === "ad"
-        ? "ai.preserve-hue-and-saturation"
-        : "ai.auto";
+    fields["lighting.mode"] = "ai.auto";
   }
 
   if (blueprint.enable_beautify) {
@@ -266,8 +345,7 @@ export function blueprintToPhotoroomFields(
     fields["uncrop.mode"] = "ai.auto";
   }
 
-  // Valid Photoroom enum is ai.artificial (not bare "artificial")
-  // Only strip post-process overlays; packaging labels should remain
+  // Photoroom valid enum is ai.artificial (user shorthand "artificial")
   fields["textRemoval.mode"] = "ai.artificial";
 
   if (options.applyShadowOverrides !== false) {
@@ -282,12 +360,14 @@ export function blueprintToPhotoroomFields(
     fields["shadow.softnessOverride"] = String(blueprint.shadow_softness);
   }
 
-  // Drop empties
   for (const [k, v] of Object.entries(fields)) {
     if (v === undefined || v === null || String(v).trim() === "") {
       delete fields[k];
     }
   }
+
+  // Final guard: padding must always exist as "0.18" or "0.20"
+  fields.padding = formatPhotoroomPadding(paddingValue);
 
   return fields;
 }
