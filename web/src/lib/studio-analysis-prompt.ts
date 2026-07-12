@@ -48,7 +48,7 @@ export type CreativeDirectorAnalysis = {
 /** Locked padding for compact products (still ≤40% frame). */
 export const PADDING_COMPACT = 0.18;
 /** Locked padding for tall / open / asymmetrical silhouettes (open lids). */
-export const PADDING_TALL_OPEN = 0.2;
+export const PADDING_TALL_OPEN = 0.22;
 
 export const DEFAULT_API_BLUEPRINT: StudioApiBlueprint = {
   output_size: "1000x1000",
@@ -103,14 +103,16 @@ SECTION II: INDUSTRY PRESETS (Indian sectors)
 10. Electronics & Gadgets: cool studio lighting; subject_pose "upright"; silhouette usually "compact".
 
 SECTION III: COMPOSITION, PERSPECTIVE & CANVAS (CRITICAL)
-11. The 35–40% Framing Rule (anti over-scale): Product (including open lids) must NEVER touch the absolute top/bottom borders and must occupy only ~35–40% of the 1000x1000 canvas.
-    - Set api_blueprint.silhouette = "tall_open_asymmetrical" for open gift boxes, open lids, tall vertical packs, or irregular silhouettes → engine will FORCE padding = 0.20
+11. Visible border margin rule (anti over-scale): Product (including open lids) must NEVER touch the absolute top/bottom borders. Keep a clearly visible gap on all sides. Product should occupy about 35–40% of the 1000x1000 canvas.
+    - padding is a float between 0.18 and 0.25 depending on product height to ensure a visible margin gap at the borders.
+    - Set api_blueprint.silhouette = "tall_open_asymmetrical" for open gift boxes, open lids, tall vertical packs, or irregular silhouettes → engine will FORCE padding = 0.22
     - Set api_blueprint.silhouette = "compact" for closed boxes, bottles, jars → engine will FORCE padding = 0.18
-    - Always also set api_blueprint.padding to 0.20 (tall/open) or 0.18 (compact) to match silhouette — do not invent other padding values
-12. Grounded perspective (anti floating): Product sits ON a physical surface with contact shadow. Not tilted floating cutouts.
-13. Canvas Contrast Guard: If packaging is primarily white/light, set canvas_bg_color to "F5F5F5".
-14. Smart Ambient Relighting: enable_relighting true by default; packaging text must remain crisp.
-15. Cultural Context Safety: festive scenes — unlit brass diyas and individual marigold petals only; no open flames.
+    - Always also set api_blueprint.padding to 0.22 (tall/open) or 0.18 (compact) to match silhouette — do not invent values outside 0.18–0.25
+12. Center alignment: Keep the subject vertically and horizontally centered so the breathing-room gap is distributed evenly at top and bottom (never pushed upward against the top border).
+13. Grounded perspective (anti floating): Product sits ON a physical surface with contact shadow. Not tilted floating cutouts.
+14. Canvas Contrast Guard: If packaging is primarily white/light, set canvas_bg_color to "F5F5F5".
+15. Smart Ambient Relighting: enable_relighting true by default; packaging text must remain crisp.
+16. Cultural Context Safety: festive scenes — unlit brass diyas and individual marigold petals only; no open flames.
 
 ${PROP_SPECIFICITY_RULES}
 
@@ -127,6 +129,7 @@ Hard output rules:
 - api_blueprint.output_size = "1000x1000"
 - api_blueprint.export_format = "png"
 - shadow_intensity and shadow_softness are floats from 0.0 to 1.0
+- padding: a float between 0.18 and 0.25 depending on product height to ensure a visible margin gap at the borders (engine locks open/tall boxes to 0.22 and compact products to 0.18)
 
 Output strictly as a JSON object with this shape:
 {
@@ -137,7 +140,7 @@ Output strictly as a JSON object with this shape:
   "logo_safety_note": "string",
   "api_blueprint": {
     "output_size": "1000x1000",
-    "padding": 0.18,
+    "padding": 0.22,
     "silhouette": "compact|tall_open_asymmetrical",
     "subject_pose": "upright|flatlay",
     "shadow_direction": "behindLeft|behindRight|behind|left|right|BOTTOM_CENTER|CENTER",
@@ -153,7 +156,7 @@ Output strictly as a JSON object with this shape:
 }`;
 
 export const CREATIVE_DIRECTOR_USER_TEXT =
-  "Analyze this merchant product photo as a precision commercial photographer. Detect if the silhouette is tall/open/asymmetrical (e.g. open gift box lid). Enforce 35–40% framing with locked padding 0.18 or 0.20, grounded shadows, sharp packaging text. Return strict JSON only.";
+  "Analyze this merchant product photo as a precision commercial photographer. Detect if the silhouette is tall/open/asymmetrical (e.g. open gift box lid). Enforce visible top/bottom margin gaps with padding between 0.18 and 0.25 (open boxes → 0.22). Keep subject centered. Return strict JSON only.";
 
 /**
  * Lifestyle / ad background prompt writer — exact counts & positions only.
@@ -163,7 +166,7 @@ export const AD_BACKGROUND_SYSTEM_PROMPT = `You are a commercial product photogr
 Rules:
 - Describe ONLY the environment: surface material, 1–3 precise props, visible detailed background, lighting direction.
 - Product must look PLANTED on the surface (not floating/tilted). Mention a clear table/counter contact plane.
-- Product centered, occupying about 35–40% of the frame with generous empty margin so lids/tops never touch the frame border.
+- Product centered both horizontally and vertically, occupying about 35–40% of the frame with generous empty margin so lids/tops never touch the frame border (open boxes need ~22% padding margin).
 - Background fully detailed and visible — no blur, no bokeh, no empty gradient.
 - No hands, people, brand names, logos, watermarks, or abstract generative shapes.
 - No repetitive yellow circles, dots, blobs, confetti, or random decorative scatter.
@@ -197,7 +200,7 @@ export function mapSubjectPoseOverride(pose: SubjectPose): string {
 
 /**
  * Hard-lock padding so tall/open lids never touch frame borders.
- * compact → 0.18 | tall_open_asymmetrical → 0.20
+ * compact → 0.18 | tall_open_asymmetrical → 0.22
  * Never trust model-invented padding for final Photoroom calls.
  */
 export function lockPaddingForSilhouette(
@@ -217,7 +220,7 @@ export function formatPhotoroomPadding(padding: number): string {
   const locked =
     padding === PADDING_COMPACT || padding === PADDING_TALL_OPEN
       ? padding
-      : padding >= 0.19
+      : padding >= 0.2
         ? PADDING_TALL_OPEN
         : PADDING_COMPACT;
   return locked.toFixed(2);
@@ -237,7 +240,7 @@ export function normalizeCreativeDirectorAnalysis(
   const silhouette: ProductSilhouette =
     bp.silhouette === "compact" ? "compact" : "tall_open_asymmetrical";
 
-  // Engine authority: overwrite any model padding with locked 0.18 / 0.20
+  // Engine authority: overwrite any model padding with locked 0.18 / 0.22
   const padding = lockPaddingForSilhouette(silhouette, String(raw.product_name || ""));
 
   const canvas = String(bp.canvas_bg_color || "FFFFFF")
@@ -316,6 +319,9 @@ export function blueprintToPhotoroomFields(
   const fields: Record<string, string> = {
     removeBackground: "true",
     padding: formatPhotoroomPadding(paddingValue),
+    // Even top/bottom gap — do not push product toward the top border
+    verticalAlignment: "center",
+    horizontalAlignment: "center",
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
   };
@@ -366,8 +372,10 @@ export function blueprintToPhotoroomFields(
     }
   }
 
-  // Final guard: padding must always exist as "0.18" or "0.20"
+  // Final guard: padding must always exist as "0.18" or "0.22" and stay centered
   fields.padding = formatPhotoroomPadding(paddingValue);
+  fields.verticalAlignment = "center";
+  fields.horizontalAlignment = "center";
 
   return fields;
 }

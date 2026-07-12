@@ -278,6 +278,8 @@ async function renderWithBlueprint(options: {
     padding: formatPhotoroomPadding(
       lockPaddingForSilhouette(blueprint.silhouette, undefined),
     ),
+    verticalAlignment: "center",
+    horizontalAlignment: "center",
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
     "lighting.mode": "ai.auto",
