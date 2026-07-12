@@ -92,9 +92,21 @@ const COPY = {
     hinglish: "Aaj aap kya banana chahenge?",
   },
   studio_analyzing: {
-    en: "Looking at your photo — finding the main product and the best studio look… 📸",
-    hi: "आपकी photo देख रही हूँ — मुख्य product और best studio look ढूँढ रही हूँ… 📸",
-    hinglish: "Aapki photo dekh rahi hoon — main product aur best studio look dhoondh rahi hoon… 📸",
+    en: "Studying your product in detail — brand, type, industry — then writing 5 professional studio prompts… 📸",
+    hi: "आपका product अच्छे से समझ रही हूँ — brand, type, industry — फिर 5 professional studio prompts लिखूँगी… 📸",
+    hinglish:
+      "Aapka product detail mein samajh rahi hoon — brand, type, industry — phir 5 professional studio prompts likhungi… 📸",
+  },
+  studio_pick_prompt: {
+    en: "Pick one look below — or write your own prompt.",
+    hi: "नीचे से एक look चुनें — या अपना prompt लिखें।",
+    hinglish: "Neeche se ek look choose karo — ya apna prompt likho.",
+  },
+  studio_ask_manual_prompt: {
+    en: "Write your scene prompt in one message — background, lighting, mood, props.\n\nExample: *Product on white marble, soft window light from left, two marigold petals front-left, premium gift look*",
+    hi: "अपना scene prompt एक message में लिखें — background, lighting, mood, props।\n\nजैसे: *Product white marble पर, soft window light left से, दो marigold petals front-left, premium gift look*",
+    hinglish:
+      "Apna scene prompt ek message mein likho — background, lighting, mood, props.\n\nJaise: *Product on white marble, soft window light from left, two marigold petals front-left, premium gift look*",
   },
   studio_pick_style: {
     en: "Here are the styles I recommend —",
@@ -112,14 +124,21 @@ const COPY = {
     hinglish: "Lighting — AI recommended theek hai, ya apna mood pick karo.",
   },
   studio_ask_quality: {
-    en: "Almost ready! Pick image quality — then I'll create 3 variations for you.",
-    hi: "लगभग तैयार! Image quality चुनें — फिर 3 variations बनाऊँगी।",
-    hinglish: "Almost ready! Image quality pick karo — phir 3 variations banaungi.",
+    en: "Almost ready! Pick image quality — then I'll create your studio shot.",
+    hi: "लगभग तैयार! Image quality चुनें — फिर studio shot बनाऊँगी।",
+    hinglish: "Almost ready! Image quality pick karo — phir studio shot banaungi.",
   },
   studio_variations_done: {
-    en: "Here are 3 realistic scenes tailored to your product — pick your favourite, or try the options below.",
-    hi: "ये रहे आपके product के लिए 3 realistic scenes — पसंदीदा चुनें, या नीचे options देखें।",
-    hinglish: "Yeh rahe aapke product ke liye 3 realistic scenes — favourite pick karo, ya neeche options dekho.",
+    en: "Here’s your studio shot — try another prompt below if you want a different look.",
+    hi: "यह रहा आपका studio shot — दूसरा look चाहिए तो नीचे से नया prompt चुनें।",
+    hinglish:
+      "Yeh raha aapka studio shot — doosra look chahiye to neeche se naya prompt choose karo.",
+  },
+  studio_shot_done: {
+    en: "Here’s your best studio shot for this prompt ✨ (1 studio credit used)",
+    hi: "यह रहा इस prompt का best studio shot ✨ (1 studio credit लगा)",
+    hinglish:
+      "Yeh raha is prompt ka best studio shot ✨ (1 studio credit laga)",
   },
   studio_post_actions: {
     en: "What would you like to do next?",
@@ -127,14 +146,16 @@ const COPY = {
     hinglish: "Aage kya karna hai?",
   },
   studio_intent_hint: {
-    en: "Got it — tap a style above, or describe what you want.\n\nTry: *luxury black*, *white background*, *festival look*, or *remove background*",
-    hi: "ठीक है — ऊपर style tap करें, या बता दें क्या चाहिए।\n\nजैसे: *luxury black*, *white background*, *festival*, या *remove background*",
-    hinglish: "Theek hai — upar style tap karo, ya bata do kya chahiye.\n\nJaise: *luxury black*, *white background*, *festival*, ya *remove background*",
+    en: "Tap a look above (1–5), type a number, or write your own scene prompt (at least one short sentence).",
+    hi: "ऊपर look tap करें (1–5), नंबर लिखें, या अपना scene prompt लिखें (कम से कम एक छोटी लाइन)।",
+    hinglish:
+      "Upar look tap karo (1–5), number likho, ya apna scene prompt likho (kam se kam ek short line).",
   },
   studio_use_actions: {
-    en: "Tap one of the options above — regenerate, try another style, enhance quality, or create an ad.",
-    hi: "ऊपर का option tap करें — regenerate, दूसरा style, quality enhance, या ad बनाएँ।",
-    hinglish: "Upar wala option tap karo — regenerate, doosra style, quality enhance, ya ad banao.",
+    en: "Tap an option above — same prompt again, 5 fresh prompts, write your own, or create an ad.",
+    hi: "ऊपर option tap करें — वही prompt फिर, 5 नए prompts, अपना लिखें, या ad बनाएँ।",
+    hinglish:
+      "Upar option tap karo — wahi prompt phir, 5 naye prompts, apna likho, ya ad banao.",
   },
   studio_done_message: {
     en: "Lovely! Send another product photo whenever you're ready 📸",
@@ -160,9 +181,10 @@ const COPY = {
       "Jo scene dimaag mein hai, ek short line mein bata do.\n\nJaise: *wooden kitchen counter* ya *soft blue minimalist backdrop*",
   },
   studio_generating: {
-    en: "Perfect — isolating your main product, then building 3 realistic studio scenes. Images arrive one by one ⏳",
-    hi: "बढ़िया — मुख्य product निकाल रही हूँ, फिर 3 realistic studio scenes बनाऊँगी। Images एक-एक करके आएंगी ⏳",
-    hinglish: "Perfect — main product nikaal rahi hoon, phir 3 realistic studio scenes banaungi. Images ek-ek karke aayengi ⏳",
+    en: "Creating your best studio shot from this prompt — about 20–40 seconds ⏳",
+    hi: "इस prompt से best studio shot बना रही हूँ — लगभग 20–40 सेकंड ⏳",
+    hinglish:
+      "Is prompt se best studio shot bana rahi hoon — lagbhag 20–40 second ⏳",
   },
   diecut_generating: {
     en: "On it — creating your die-cut (transparent PNG). About 10–20 seconds ⏳",

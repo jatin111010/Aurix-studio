@@ -8,6 +8,7 @@ export async function POST(request: Request) {
       imageUrl?: string;
       mode?: "catalog" | "ad";
       userVibeText?: string;
+      backgroundPromptOverride?: string;
       uploadUserId?: string;
     };
 
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
       imageUrl: body.imageUrl,
       mode: body.mode,
       userVibeText: body.userVibeText,
+      backgroundPromptOverride: body.backgroundPromptOverride,
       uploadUserId: body.uploadUserId,
     });
 

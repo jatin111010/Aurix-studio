@@ -8,6 +8,8 @@ export type ConversationStep =
   | "studio_awaiting_angle"
   | "studio_awaiting_lighting"
   | "studio_awaiting_quality"
+  | "studio_awaiting_prompt"
+  | "studio_awaiting_manual_prompt"
   | "studio_awaiting_actions"
   | "ad_awaiting_style"
   | "ad_awaiting_purpose"
@@ -111,8 +113,11 @@ export function recoveryStepAfterStale(
   if (typeof pre === "string" && pre !== "generating") {
     return pre as ConversationStep;
   }
+  if (choices.promptOptions || choices.productBrief) {
+    return "studio_awaiting_prompt";
+  }
   if (choices.analysis || choices.mode === "studio") {
-    return "studio_awaiting_quality";
+    return "studio_awaiting_prompt";
   }
   if (choices.backgroundId || choices.templateId) {
     return "ad_awaiting_confirm";

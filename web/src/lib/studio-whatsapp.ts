@@ -5,7 +5,13 @@ import {
   PaywallError,
 } from "@/lib/generation";
 import { sendPaywallMessage } from "@/lib/paywall";
-import { analyzeProduct, type ProductAnalysis } from "@/lib/studio-analysis";
+import {
+  createStudioPromptPack,
+  formatProductBriefMessage,
+  formatPromptChoicesMessage,
+  type ProductBrief,
+  type StudioPromptOption,
+} from "@/lib/studio-brief";
 import {
   buildStudioVariationsProgressive,
   saveStudioSet,
@@ -13,27 +19,10 @@ import {
   type BuiltStudioSet,
 } from "@/lib/studio-generation";
 import {
-  mergeIntentWithAnalysis,
-  parseStudioIntent,
-  type StudioIntent,
-} from "@/lib/studio-intent";
-import {
-  CAMERA_ANGLES,
   getStudioChoices,
-  isCameraAngleId,
-  isLightingId,
-  isQualityId,
-  isStudioStyleId,
-  LIGHTING_PRESETS,
-  QUALITY_PRESETS,
-  type CameraAngleId,
-  type LightingId,
-  type QualityId,
   type StudioChoices,
-  type StudioStyleId,
 } from "@/lib/studio-options";
 import { getPhotoroomMode } from "@/lib/photoroom";
-import { styleListRows } from "@/lib/studio-recommendations";
 import {
   DEFAULT_LANG,
   isVeloraLang,
@@ -45,54 +34,47 @@ import { startAdInterview } from "@/lib/ad-whatsapp";
 import { canGenerate } from "@/lib/users";
 
 export const STUDIO_STEPS = new Set([
+  "studio_awaiting_prompt",
+  "studio_awaiting_manual_prompt",
+  "studio_awaiting_actions",
+  // Legacy steps (resume / mid-flight conversations)
   "studio_awaiting_style",
   "studio_awaiting_angle",
   "studio_awaiting_lighting",
   "studio_awaiting_quality",
-  "studio_awaiting_actions",
 ]);
 
 function langOf(choices: Record<string, unknown>): VeloraLang {
   return isVeloraLang(choices.lang) ? choices.lang : DEFAULT_LANG;
 }
 
-function analysisIntro(analysis: ProductAnalysis, lang: VeloraLang): string {
-  const summary = analysis.summary;
-  const setting = analysis.idealSetting;
-  const messy =
-    analysis.photoQuality === "messy" || analysis.photoQuality === "cluttered";
-
-  if (lang === "hi") {
-    const cleanup = messy
-      ? `\n\nPhoto थोड़ी messy है — मैं *मुख्य product* निकालकर clean studio look बनाऊँगी।`
-      : "";
-    const settingLine = setting
-      ? `\n\nसबसे natural look के लिए *${setting}* जैसी setting suggest करूँगी।`
-      : "";
-    return `मैंने आपका product देख लिया।\n\nयह *${summary}* जैसा लगता है।${cleanup}${settingLine}\n\nइस तरह के products के लिए ये studio styles सबसे अच्छे रहते हैं —`;
-  }
-  if (lang === "hinglish") {
-    const cleanup = messy
-      ? `\n\nPhoto thodi messy hai — main *main product* nikaal ke clean studio look banaungi.`
-      : "";
-    const settingLine = setting
-      ? `\n\nSabse natural look ke liye *${setting}* jaisi setting suggest karungi.`
-      : "";
-    return `Maine aapka product dekh liya.\n\nYeh *${summary}* jaisa lagta hai.${cleanup}${settingLine}\n\nIs type ke products ke liye yeh studio styles best perform karte hain —`;
-  }
-  const cleanup = messy
-    ? `\n\nThe photo is a bit messy — I'll isolate the *main product* and rebuild a clean studio look.`
-    : "";
-  const settingLine = setting
-    ? `\n\nFor the most natural look I'll suggest scenes like *${setting}*.`
-    : "";
-  return `I've looked at your product.\n\nIt looks like *${summary}*.${cleanup}${settingLine}\n\nFor products like this, these studio styles usually work best —`;
+function thinAnalysisFromBrief(brief: ProductBrief) {
+  return {
+    category: (brief.category || "general") as import("@/lib/studio-analysis").ProductCategory,
+    summary: brief.description.slice(0, 160),
+    packagingType: brief.packaging,
+    premiumLevel: brief.premiumLevel,
+    brandColors: brief.colors,
+    hasReflection: false,
+    hasTransparency: false,
+    recommendedStyleId: "ai_recommended" as const,
+    recommendedStyleLabel: "AI Prompt Director",
+    recommendedAngleId: "front" as const,
+    recommendedLightingId: "soft" as const,
+    idealSetting: brief.industryType,
+    photoQuality: brief.photoQuality,
+    mainProduct: brief.mainProduct,
+    photoIssues: brief.photoIssues,
+    productClarity: brief.visualDetails,
+    isolateFirst: brief.photoQuality !== "clean",
+  };
 }
 
-function defaultChoices(
+function baseChoices(
   lang: VeloraLang,
-  analysis: ProductAnalysis,
-  partial?: Partial<StudioChoices>,
+  brief: ProductBrief,
+  prompts: StudioPromptOption[],
+  guidance: string,
 ): StudioChoices {
   return {
     mode: "studio",
@@ -100,11 +82,55 @@ function defaultChoices(
     styleId: "ai_recommended",
     angleId: "ai_recommended",
     lightingId: "ai_recommended",
-    qualityId: "standard",
+    qualityId: "hd",
     studioStyle: "scene",
-    analysis,
-    ...partial,
+    productBrief: brief,
+    promptOptions: prompts,
+    promptGuidance: guidance,
+    analysis: thinAnalysisFromBrief(brief),
   };
+}
+
+async function sendPromptPicker(
+  to: string,
+  conversationId: string,
+  choices: StudioChoices,
+): Promise<void> {
+  const lang = langOf(choices);
+  const prompts = choices.promptOptions ?? [];
+
+  await updateConversation(conversationId, {
+    step: "studio_awaiting_prompt",
+    choices,
+  });
+
+  if (choices.productBrief) {
+    await sendText(to, formatProductBriefMessage(choices.productBrief, lang));
+  }
+
+  if (choices.promptGuidance) {
+    await sendText(to, choices.promptGuidance);
+  }
+
+  // Full prompt texts (WhatsApp 4096 limit — trim if needed)
+  let detail = formatPromptChoicesMessage(prompts, lang);
+  if (detail.length > 3500) {
+    detail = `${detail.slice(0, 3490)}…`;
+  }
+  await sendText(to, detail);
+
+  await sendList(to, say(lang, "studio_pick_prompt"), "Choose look", [
+    ...prompts.map((p) => ({
+      id: `studio_prompt_${p.id}`,
+      title: p.title.slice(0, 24),
+      description: p.teaser.slice(0, 72),
+    })),
+    {
+      id: "studio_prompt_manual",
+      title: "✍️ Write my prompt",
+      description: "Type your own scene idea",
+    },
+  ]);
 }
 
 export async function startStudioExperience(
@@ -122,96 +148,49 @@ export async function startStudioExperience(
 
   await sendText(to, say(lang, "studio_analyzing"));
 
-  const analysis = await analyzeProduct(inputImageUrl);
-  const choices = defaultChoices(lang, analysis);
+  const pack = await createStudioPromptPack(inputImageUrl);
+  const choices = baseChoices(lang, pack.brief, pack.prompts, pack.guidance);
 
   await updateConversation(conversationId, {
-    step: "studio_awaiting_style",
+    step: "studio_awaiting_prompt",
     input_image_url: inputImageUrl,
     choices,
   });
 
-  await sendText(to, analysisIntro(analysis, lang));
-  await sendList(
-    to,
-    say(lang, "studio_pick_style"),
-    "Choose style",
-    styleListRows(analysis.category, analysis),
-  );
+  await sendPromptPicker(to, conversationId, choices);
 }
 
-export async function askStudioAngle(
+/** Refresh 5 new prompts for the same product image (still free until generate). */
+export async function refreshStudioPrompts(
+  to: string,
+  conversationId: string,
+  inputImageUrl: string,
+  choices: StudioChoices,
+): Promise<void> {
+  const lang = langOf(choices);
+  await sendText(to, say(lang, "studio_analyzing"));
+
+  const pack = await createStudioPromptPack(inputImageUrl);
+  const updated = baseChoices(lang, pack.brief, pack.prompts, pack.guidance);
+  // Keep prior selection cleared
+  updated.selectedPromptId = undefined;
+  updated.selectedPromptText = undefined;
+  updated.customPrompt = undefined;
+
+  await sendPromptPicker(to, conversationId, updated);
+}
+
+async function askManualPrompt(
   to: string,
   conversationId: string,
   choices: StudioChoices,
 ): Promise<void> {
   const lang = langOf(choices);
   await updateConversation(conversationId, {
-    step: "studio_awaiting_angle",
+    step: "studio_awaiting_manual_prompt",
     choices,
   });
-
-  await sendList(to, say(lang, "studio_ask_angle"), "Camera angle", [
-    {
-      id: "studio_angle_ai_recommended",
-      title: "⭐ AI Recommended",
-      description: "Best angle for your product",
-    },
-    ...Object.values(CAMERA_ANGLES)
-      .filter((a) => a.id !== "ai_recommended")
-      .map((a) => ({
-        id: `studio_angle_${a.id}`,
-        title: a.label,
-        description: a.promptSuffix || a.label,
-      })),
-  ]);
-}
-
-export async function askStudioLighting(
-  to: string,
-  conversationId: string,
-  choices: StudioChoices,
-): Promise<void> {
-  const lang = langOf(choices);
-  await updateConversation(conversationId, {
-    step: "studio_awaiting_lighting",
-    choices,
-  });
-
-  await sendList(to, say(lang, "studio_ask_lighting"), "Lighting", [
-    {
-      id: "studio_light_ai_recommended",
-      title: "⭐ AI Recommended",
-      description: "Matched to your product",
-    },
-    ...Object.values(LIGHTING_PRESETS)
-      .filter((l) => l.id !== "ai_recommended")
-      .map((l) => ({
-        id: `studio_light_${l.id}`,
-        title: l.label,
-        description: l.promptSuffix.split(",")[0],
-      })),
-  ]);
-}
-
-export async function askStudioQuality(
-  to: string,
-  conversationId: string,
-  choices: StudioChoices,
-): Promise<void> {
-  const lang = langOf(choices);
-  await updateConversation(conversationId, {
-    step: "studio_awaiting_quality",
-    choices,
-  });
-
-  await sendList(to, say(lang, "studio_ask_quality"), "Image quality", [
-    ...Object.values(QUALITY_PRESETS).map((q) => ({
-      id: `studio_quality_${q.id}`,
-      title: q.label,
-      description: q.description,
-    })),
-  ]);
+  await sendText(to, say(lang, "studio_ask_manual_prompt"));
 }
 
 async function runStudioGeneration(
@@ -220,7 +199,7 @@ async function runStudioGeneration(
   conversationId: string,
   inputImageUrl: string,
   choices: StudioChoices,
-  preStep: ConversationStep = "studio_awaiting_quality",
+  preStep: ConversationStep = "studio_awaiting_prompt",
 ): Promise<void> {
   await updateConversation(conversationId, {
     step: "generating",
@@ -228,13 +207,7 @@ async function runStudioGeneration(
   });
 
   const lang = langOf(choices);
-  const isDiecut =
-    choices.studioStyle === "diecut" || choices.styleId === "diecut";
-
-  await sendText(
-    to,
-    isDiecut ? say(lang, "diecut_generating") : say(lang, "studio_generating"),
-  );
+  await sendText(to, say(lang, "studio_generating"));
 
   try {
     const credit = await checkStudioCredit(userId);
@@ -245,19 +218,11 @@ async function runStudioGeneration(
       inputImageUrl,
       choices,
       async (v) => {
-        if (choices.studioStyle === "diecut" || choices.styleId === "diecut") {
-          await sendImagePng(
-            to,
-            v.png,
-            `Velora Studio — Transparent PNG${sandbox}\nUse on catalog, Instagram, or any background.`,
-          );
-        } else {
-          await sendImagePng(
-            to,
-            v.png,
-            `Variation ${v.label} — ${v.styleLabel}${sandbox}`,
-          );
-        }
+        await sendImagePng(
+          to,
+          v.png,
+          `Velora Studio — ${v.styleLabel}${sandbox}\n1 studio credit used`,
+        );
       },
       { uploadUserId: userId },
     );
@@ -267,7 +232,7 @@ async function runStudioGeneration(
   } catch (error) {
     if (error instanceof PaywallError) {
       await updateConversation(conversationId, {
-        step: "studio_awaiting_style",
+        step: "studio_awaiting_prompt",
         choices,
       });
       await sendPaywallMessage(to, userId, lang);
@@ -288,7 +253,6 @@ async function runStudioGeneration(
     });
     const detail =
       error instanceof Error ? error.message.slice(0, 120) : "unknown error";
-    console.error("Studio failure detail:", detail);
     await sendText(
       to,
       `${say(lang, "err_generation_failed")}\n\n(Tech: ${detail})`,
@@ -308,11 +272,31 @@ async function sendStudioPostActions(
   });
 
   await sendList(to, say(lang, "studio_post_actions"), "What next?", [
-    { id: "studio_regenerate", title: "🔄 Regenerate", description: "New variations with same settings" },
-    { id: "studio_another_style", title: "🎨 Try Another Style", description: "Pick a different look" },
-    { id: "studio_enhance", title: "✨ Enhance Quality", description: "Upgrade to HD or Ultra HD" },
-    { id: "studio_create_ad", title: "🖼 Create Social Ad", description: "Turn into a marketing ad" },
-    { id: "studio_done", title: "✅ Done", description: "Send another product photo" },
+    {
+      id: "studio_regenerate",
+      title: "🔄 Same prompt again",
+      description: "New render, same look (1 credit)",
+    },
+    {
+      id: "studio_new_prompts",
+      title: "✨ 5 fresh prompts",
+      description: "New AI looks for this product",
+    },
+    {
+      id: "studio_prompt_manual",
+      title: "✍️ Write my prompt",
+      description: "Type your own scene idea",
+    },
+    {
+      id: "studio_create_ad",
+      title: "🖼 Create Social Ad",
+      description: "Turn into a marketing ad",
+    },
+    {
+      id: "studio_done",
+      title: "✅ Done",
+      description: "Send another product photo",
+    },
   ]);
 }
 
@@ -325,35 +309,29 @@ export async function resumeStudioAfterStale(
   const studio = getStudioChoices(choices);
   const lang = langOf(studio);
 
-  if (step === "studio_awaiting_quality") {
-    await askStudioQuality(to, conversationId, studio);
+  if (step === "studio_awaiting_prompt" && studio.promptOptions?.length) {
+    await sendPromptPicker(to, conversationId, studio);
+    return true;
+  }
+  if (step === "studio_awaiting_manual_prompt") {
+    await askManualPrompt(to, conversationId, studio);
     return true;
   }
   if (step === "studio_awaiting_actions") {
     await sendStudioPostActions(to, conversationId, studio, lang);
     return true;
   }
-  if (step === "studio_awaiting_style" && studio.analysis) {
-    await updateConversation(conversationId, {
-      step: "studio_awaiting_style",
-      choices: studio,
-    });
-    await sendText(to, analysisIntro(studio.analysis, lang));
-    await sendList(
-      to,
-      say(lang, "studio_pick_style"),
-      "Choose style",
-      styleListRows(studio.analysis.category, studio.analysis),
-    );
-    return true;
-  }
-  if (step === "studio_awaiting_angle") {
-    await askStudioAngle(to, conversationId, studio);
-    return true;
-  }
-  if (step === "studio_awaiting_lighting") {
-    await askStudioLighting(to, conversationId, studio);
-    return true;
+  // Legacy mid-flight → show existing prompts or ask to pick again
+  if (
+    step === "studio_awaiting_style" ||
+    step === "studio_awaiting_angle" ||
+    step === "studio_awaiting_lighting" ||
+    step === "studio_awaiting_quality"
+  ) {
+    if (studio.promptOptions?.length) {
+      await sendPromptPicker(to, conversationId, studio);
+      return true;
+    }
   }
   return false;
 }
@@ -364,10 +342,7 @@ async function finishStudioDelivery(
   built: BuiltStudioSet,
   lang: VeloraLang,
 ): Promise<void> {
-  if (built.studioStyle !== "diecut") {
-    await sendText(to, say(lang, "studio_variations_done"));
-  }
-
+  await sendText(to, say(lang, "studio_shot_done"));
   await sendStudioPostActions(to, conversationId, built.choices, lang);
 }
 
@@ -377,7 +352,7 @@ export async function handleStudioGenerate(
   conversationId: string,
   inputImageUrl: string,
   choices: StudioChoices,
-  preStep: ConversationStep = "studio_awaiting_quality",
+  preStep: ConversationStep = "studio_awaiting_prompt",
 ): Promise<void> {
   await runStudioGeneration(
     to,
@@ -389,96 +364,40 @@ export async function handleStudioGenerate(
   );
 }
 
-function parseStyleId(replyId: string): StudioStyleId | null {
-  if (!replyId.startsWith("studio_style_")) return null;
-  const id = replyId.slice(13) as StudioStyleId;
-  return isStudioStyleId(id) ? id : null;
+function parsePromptId(replyId: string): number | null {
+  if (!replyId.startsWith("studio_prompt_")) return null;
+  const raw = replyId.slice("studio_prompt_".length);
+  if (raw === "manual") return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
 }
 
-function parseAngleId(replyId: string): CameraAngleId | null {
-  if (!replyId.startsWith("studio_angle_")) return null;
-  const id = replyId.slice(13) as CameraAngleId;
-  return isCameraAngleId(id) ? id : null;
-}
-
-function parseLightingId(replyId: string): LightingId | null {
-  if (!replyId.startsWith("studio_light_")) return null;
-  const id = replyId.slice(13) as LightingId;
-  return isLightingId(id) ? id : null;
-}
-
-function parseQualityId(replyId: string): QualityId | null {
-  if (!replyId.startsWith("studio_quality_")) return null;
-  const id = replyId.slice(15) as QualityId;
-  return isQualityId(id) ? id : null;
-}
-
-async function applyStyleAndContinue(
+async function generateFromPrompt(
   to: string,
+  userId: string,
   conversationId: string,
   inputImageUrl: string,
-  userId: string,
   choices: StudioChoices,
-  styleId: StudioStyleId,
+  promptId: number,
+  promptText: string,
+  preStep: ConversationStep = "studio_awaiting_prompt",
 ): Promise<void> {
   const updated: StudioChoices = {
     ...choices,
-    styleId,
-    studioStyle: styleId === "diecut" ? "diecut" : "scene",
+    selectedPromptId: promptId,
+    selectedPromptText: promptText,
+    customPrompt: promptId === 0 ? promptText : choices.customPrompt,
+    studioStyle: "scene",
+    styleId: "ai_recommended",
   };
-
-  if (styleId === "diecut") {
-    await handleStudioGenerate(to, userId, conversationId, inputImageUrl, updated);
-    return;
-  }
-
-  if (styleId === "ai_recommended") {
-    await askStudioQuality(to, conversationId, {
-      ...updated,
-      angleId: "ai_recommended",
-      lightingId: "ai_recommended",
-    });
-    return;
-  }
-
-  await askStudioAngle(to, conversationId, updated);
-}
-
-async function maybeFastTrackFromIntent(
-  to: string,
-  userId: string,
-  conversationId: string,
-  inputImageUrl: string,
-  choices: StudioChoices,
-  intent: StudioIntent,
-): Promise<boolean> {
-  if (!intent.styleId && !intent.diecut && !intent.customPrompt) return false;
-
-  const merged = mergeIntentWithAnalysis(intent, choices.analysis!);
-  const updated: StudioChoices = {
-    ...choices,
-    styleId: intent.diecut ? "diecut" : merged.styleId,
-    angleId: merged.angleId,
-    lightingId: merged.lightingId,
-    qualityId: merged.qualityId,
-    studioStyle: intent.diecut ? "diecut" : "scene",
-    customPrompt: intent.customPrompt,
-  };
-
-  if (intent.skipToGenerate || intent.diecut || intent.customPrompt) {
-    await handleStudioGenerate(to, userId, conversationId, inputImageUrl, updated);
-    return true;
-  }
-
-  await applyStyleAndContinue(
+  await handleStudioGenerate(
     to,
+    userId,
     conversationId,
     inputImageUrl,
-    userId,
     updated,
-    updated.styleId,
+    preStep,
   );
-  return true;
 }
 
 export async function handleStudioReply(
@@ -490,91 +409,58 @@ export async function handleStudioReply(
   inputImageUrl: string,
 ): Promise<boolean> {
   const studio = getStudioChoices(choices);
+  const lang = langOf(studio);
 
-  const styleId = parseStyleId(replyId);
-  if (styleId && studio.analysis) {
-    await applyStyleAndContinue(
-      to,
-      conversationId,
-      inputImageUrl,
-      userId,
-      studio,
-      styleId,
-    );
-    return true;
-  }
-
-  const angleId = parseAngleId(replyId);
-  if (angleId) {
-    await askStudioLighting(to, conversationId, { ...studio, angleId });
-    return true;
-  }
-
-  const lightingId = parseLightingId(replyId);
-  if (lightingId) {
-    await askStudioQuality(to, conversationId, { ...studio, lightingId });
-    return true;
-  }
-
-  const qualityId = parseQualityId(replyId);
-  if (qualityId) {
-    await handleStudioGenerate(to, userId, conversationId, inputImageUrl, {
-      ...studio,
-      qualityId,
-    });
-    return true;
-  }
-
-  if (replyId === "studio_regenerate" && studio.analysis) {
-    await handleStudioGenerate(
+  const promptId = parsePromptId(replyId);
+  if (promptId !== null) {
+    const option = studio.promptOptions?.find((p) => p.id === promptId);
+    if (!option?.fullPrompt) {
+      await sendText(to, say(lang, "studio_pick_prompt"));
+      return true;
+    }
+    await generateFromPrompt(
       to,
       userId,
       conversationId,
       inputImageUrl,
       studio,
-      "studio_awaiting_actions",
+      promptId,
+      option.fullPrompt,
     );
     return true;
   }
 
-  if (replyId === "studio_another_style" && studio.analysis) {
-    await updateConversation(conversationId, {
-      step: "studio_awaiting_style",
-      choices: studio,
-    });
-    await sendText(to, analysisIntro(studio.analysis, langOf(studio)));
-    await sendList(
-      to,
-      say(langOf(studio), "studio_pick_style"),
-      "Choose style",
-      styleListRows(studio.analysis.category, studio.analysis),
-    );
+  if (replyId === "studio_prompt_manual") {
+    await askManualPrompt(to, conversationId, studio);
     return true;
   }
 
-  if (replyId === "studio_enhance" && studio.analysis) {
-    const nextQuality: QualityId =
-      studio.qualityId === "standard"
-        ? "hd"
-        : studio.qualityId === "hd"
-          ? "ultra"
-          : "ultra";
-    await handleStudioGenerate(
+  if (replyId === "studio_regenerate") {
+    const text = studio.selectedPromptText?.trim();
+    if (!text) {
+      await sendPromptPicker(to, conversationId, studio);
+      return true;
+    }
+    await generateFromPrompt(
       to,
       userId,
       conversationId,
       inputImageUrl,
-      {
-        ...studio,
-        qualityId: nextQuality,
-      },
+      studio,
+      studio.selectedPromptId ?? 0,
+      text,
       "studio_awaiting_actions",
     );
+    return true;
+  }
+
+  if (replyId === "studio_new_prompts" || replyId === "studio_another_style") {
+    await refreshStudioPrompts(to, conversationId, inputImageUrl, studio);
     return true;
   }
 
   if (replyId === "studio_create_ad") {
-    await startAdInterview(to, conversationId, langOf(studio));
+    await startAdInterview(to, conversationId, lang);
     return true;
   }
 
@@ -585,10 +471,24 @@ export async function handleStudioReply(
     const quota = await getUserQuota(userId);
     await sendText(
       to,
-      say(langOf(studio), "studio_done_message") +
-        "\n\n" +
-        formatQuotaMessage(quota),
+      say(lang, "studio_done_message") + "\n\n" + formatQuotaMessage(quota),
     );
+    return true;
+  }
+
+  // Ignore obsolete enhance / style replies by re-showing prompt picker
+  if (
+    replyId.startsWith("studio_style_") ||
+    replyId.startsWith("studio_angle_") ||
+    replyId.startsWith("studio_light_") ||
+    replyId.startsWith("studio_quality_") ||
+    replyId === "studio_enhance"
+  ) {
+    if (studio.promptOptions?.length) {
+      await sendPromptPicker(to, conversationId, studio);
+      return true;
+    }
+    await refreshStudioPrompts(to, conversationId, inputImageUrl, studio);
     return true;
   }
 
@@ -607,45 +507,63 @@ export async function handleStudioText(
   if (!STUDIO_STEPS.has(step) || !inputImageUrl) return false;
 
   const studio = getStudioChoices(choices);
-  if (!studio.analysis) return false;
-
   const lang = langOf(studio);
-  const intent = parseStudioIntent(body, studio.analysis);
+  const text = body.trim();
+  if (!text) return false;
 
-  if (step === "studio_awaiting_style") {
-    const handled = await maybeFastTrackFromIntent(
+  if (step === "studio_awaiting_manual_prompt") {
+    if (text.length < 12) {
+      await sendText(to, say(lang, "err_scene_short"));
+      return true;
+    }
+    await generateFromPrompt(
       to,
       userId,
       conversationId,
       inputImageUrl,
       studio,
-      intent,
+      0,
+      text,
+      "studio_awaiting_manual_prompt",
     );
-    if (handled) return true;
-
-    await sendText(to, say(lang, "studio_intent_hint"));
     return true;
   }
 
-  if (step === "studio_awaiting_angle" || step === "studio_awaiting_lighting") {
-    if (intent.angleId || intent.lightingId || intent.skipToGenerate) {
-      const merged = mergeIntentWithAnalysis(intent, studio.analysis);
-      const updated: StudioChoices = {
-        ...studio,
-        angleId: merged.angleId,
-        lightingId: merged.lightingId,
-        qualityId: merged.qualityId,
-      };
-      await askStudioQuality(to, conversationId, updated);
-      return true;
+  if (step === "studio_awaiting_prompt") {
+    // Number shortcut: "1" … "5"
+    const num = Number(text);
+    if (Number.isInteger(num) && num >= 1 && num <= 5) {
+      const option = studio.promptOptions?.find((p) => p.id === num);
+      if (option?.fullPrompt) {
+        await generateFromPrompt(
+          to,
+          userId,
+          conversationId,
+          inputImageUrl,
+          studio,
+          num,
+          option.fullPrompt,
+        );
+        return true;
+      }
     }
-  }
 
-  if (step === "studio_awaiting_quality") {
-    if (/generate|go|start|yes|ok|haan|ha|theek/i.test(body)) {
-      await handleStudioGenerate(to, userId, conversationId, inputImageUrl, studio);
+    // Free-text treated as custom prompt if long enough
+    if (text.length >= 20) {
+      await generateFromPrompt(
+        to,
+        userId,
+        conversationId,
+        inputImageUrl,
+        studio,
+        0,
+        text,
+      );
       return true;
     }
+
+    await sendText(to, say(lang, "studio_intent_hint"));
+    return true;
   }
 
   if (step === "studio_awaiting_actions") {
@@ -653,12 +571,22 @@ export async function handleStudioText(
     return true;
   }
 
+  // Legacy steps → nudge into new flow
+  if (
+    step === "studio_awaiting_style" ||
+    step === "studio_awaiting_angle" ||
+    step === "studio_awaiting_lighting" ||
+    step === "studio_awaiting_quality"
+  ) {
+    await refreshStudioPrompts(to, conversationId, inputImageUrl, studio);
+    return true;
+  }
+
   return false;
 }
 
 export function studioGenerationErrorStep(
-  choices: StudioChoices,
-): "studio_awaiting_style" | "studio_awaiting_quality" {
-  if (choices.styleId && choices.qualityId) return "studio_awaiting_quality";
-  return "studio_awaiting_style";
+  _choices: StudioChoices,
+): "studio_awaiting_prompt" {
+  return "studio_awaiting_prompt";
 }

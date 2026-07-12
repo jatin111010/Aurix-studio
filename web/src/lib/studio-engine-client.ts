@@ -30,6 +30,7 @@ export async function runStudioEngine(
         imageUrl: input.imageUrl,
         mode: input.mode,
         userVibeText: input.userVibeText,
+        backgroundPromptOverride: input.backgroundPromptOverride,
       }),
     });
 

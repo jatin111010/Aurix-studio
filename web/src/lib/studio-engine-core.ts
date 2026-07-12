@@ -74,6 +74,11 @@ export type ProcessStudioRequestInput = {
   imageUrl: string;
   mode: StudioEngineMode;
   userVibeText?: string;
+  /**
+   * When set, use this as Photoroom background.prompt directly
+   * (skips the short vibe rewrite) — used for the 5 AI big prompts / manual prompt.
+   */
+  backgroundPromptOverride?: string;
   /** When set (WhatsApp user id), upload to Supabase storage */
   uploadUserId?: string;
 };
@@ -296,7 +301,7 @@ async function renderWithBlueprint(options: {
   if (mode === "catalog") {
     minimal["background.color"] = blueprint.canvas_bg_color || "FFFFFF";
   } else if (backgroundPrompt) {
-    minimal["background.prompt"] = backgroundPrompt.slice(0, 220);
+    minimal["background.prompt"] = backgroundPrompt.slice(0, 900);
   }
 
   const attempts = [primary, withoutTextRemoval, withoutShadow, minimal];
@@ -348,7 +353,8 @@ function buildMarketing(
 export async function processStudioRequest(
   input: ProcessStudioRequestInput,
 ): Promise<StudioEngineResult> {
-  const { imageUrl, mode, userVibeText, uploadUserId } = input;
+  const { imageUrl, mode, userVibeText, backgroundPromptOverride, uploadUserId } =
+    input;
 
   if (!imageUrl) throw new Error("imageUrl is required");
   if (mode !== "catalog" && mode !== "ad") {
@@ -379,7 +385,13 @@ export async function processStudioRequest(
 
   let backgroundPrompt: string | null = null;
   if (mode === "ad") {
-    backgroundPrompt = await generateAdBackgroundPrompt(analysis, userVibeText);
+    const override = backgroundPromptOverride?.trim();
+    if (override && override.length >= 40) {
+      // Merchant-picked / AI big prompt — use as Photoroom scene text directly
+      backgroundPrompt = override.slice(0, 900);
+    } else {
+      backgroundPrompt = await generateAdBackgroundPrompt(analysis, userVibeText);
+    }
   }
 
   const png = await renderWithBlueprint({

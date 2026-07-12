@@ -318,6 +318,15 @@ export type StudioChoices = {
   customPrompt?: string;
   studioStyle: "scene" | "diecut";
   analysis?: import("@/lib/studio-analysis").ProductAnalysis;
+  /** Deep product intelligence from the new prompt-director flow */
+  productBrief?: import("@/lib/studio-brief").ProductBrief;
+  /** 5 AI-generated Photoroom scene prompts for this product */
+  promptOptions?: import("@/lib/studio-brief").StudioPromptOption[];
+  /** Selected prompt id 1–5, or 0 for manual */
+  selectedPromptId?: number;
+  /** Full prompt text sent to Photoroom for the single best image */
+  selectedPromptText?: string;
+  promptGuidance?: string;
 };
 
 export function isStudioStyleId(id: string): id is StudioStyleId {

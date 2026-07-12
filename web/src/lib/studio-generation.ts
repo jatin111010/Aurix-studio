@@ -62,8 +62,9 @@ function vibeFromChoices(choices: StudioChoices, extra?: string): string {
 }
 
 /**
- * Build studio variations via the Studio Engine (GPT-4o + Photoroom v3).
- * Sends each finished variation through `onVariation` for progressive WhatsApp delivery.
+ * Build studio output via the Studio Engine (GPT-4o + Photoroom).
+ * New flow: one selected big prompt → one best image (1 credit).
+ * Legacy multi-variation path kept when no selectedPromptText is set.
  */
 export async function buildStudioVariationsProgressive(
   inputImageUrl: string,
@@ -93,6 +94,48 @@ export async function buildStudioVariationsProgressive(
   }
 
   const uploadUserId = options?.uploadUserId;
+  const selectedPrompt = choices.selectedPromptText?.trim();
+
+  // New Studio Prompt Director flow → single best image
+  if (selectedPrompt && selectedPrompt.length >= 20) {
+    const result = await runStudioEngine({
+      imageUrl: inputImageUrl,
+      mode: "ad",
+      userVibeText: selectedPrompt.slice(0, 160),
+      backgroundPromptOverride: selectedPrompt,
+      uploadUserId,
+    });
+
+    if (!result.ok) {
+      throw new StudioUnusableError(result.user_guidance);
+    }
+
+    const label =
+      choices.promptOptions?.find((p) => p.id === choices.selectedPromptId)
+        ?.title ||
+      (choices.selectedPromptId === 0 ? "Custom Prompt" : "Studio Look");
+
+    const variation: StudioVariation = {
+      label: "A",
+      png: result.png,
+      styleLabel: label.slice(0, 48),
+      mood: "prompt-director",
+      outputUrl: result.outputUrl.startsWith("http")
+        ? result.outputUrl
+        : undefined,
+    };
+    await onVariation(variation);
+
+    return {
+      variations: [variation],
+      studioStyle: "scene",
+      backgroundId: "prompt_director",
+      photoroomMode: getPhotoroomMode(),
+      choices,
+      userGuidance: result.user_guidance,
+    };
+  }
+
   const primaryStyle = resolvePrimaryStyle(choices);
   const variations: StudioVariation[] = [];
   let userGuidance: string | undefined;
