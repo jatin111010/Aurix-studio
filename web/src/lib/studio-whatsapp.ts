@@ -149,6 +149,21 @@ export async function startStudioExperience(
   await sendText(to, say(lang, "studio_analyzing"));
 
   const pack = await createStudioPromptPack(inputImageUrl);
+
+  if (!pack.isPhotoUsable) {
+    await updateConversation(conversationId, {
+      step: "awaiting_mode",
+      input_image_url: null,
+      choices: { lang, mode: "studio" },
+    });
+    await sendText(
+      to,
+      pack.rejectMessage || say(lang, "studio_photo_rejected"),
+    );
+    await sendText(to, say(lang, "studio_photo_tips"));
+    return;
+  }
+
   const choices = baseChoices(lang, pack.brief, pack.prompts, pack.guidance);
 
   await updateConversation(conversationId, {
@@ -171,6 +186,21 @@ export async function refreshStudioPrompts(
   await sendText(to, say(lang, "studio_analyzing"));
 
   const pack = await createStudioPromptPack(inputImageUrl);
+
+  if (!pack.isPhotoUsable) {
+    await updateConversation(conversationId, {
+      step: "awaiting_mode",
+      input_image_url: null,
+      choices: { lang, mode: "studio" },
+    });
+    await sendText(
+      to,
+      pack.rejectMessage || say(lang, "studio_photo_rejected"),
+    );
+    await sendText(to, say(lang, "studio_photo_tips"));
+    return;
+  }
+
   const updated = baseChoices(lang, pack.brief, pack.prompts, pack.guidance);
   // Keep prior selection cleared
   updated.selectedPromptId = undefined;

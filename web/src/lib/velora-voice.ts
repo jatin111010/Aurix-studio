@@ -92,10 +92,22 @@ const COPY = {
     hinglish: "Aaj aap kya banana chahenge?",
   },
   studio_analyzing: {
-    en: "Studying your product in detail — brand, type, industry — then writing 5 professional studio prompts… 📸",
-    hi: "आपका product अच्छे से समझ रही हूँ — brand, type, industry — फिर 5 professional studio prompts लिखूँगी… 📸",
+    en: "Studying your product in detail — brand, type, size, industry — then writing 5 professional studio prompts… 📸",
+    hi: "आपका product अच्छे से समझ रही हूँ — brand, type, size, industry — फिर 5 professional studio prompts लिखूँगी… 📸",
     hinglish:
-      "Aapka product detail mein samajh rahi hoon — brand, type, industry — phir 5 professional studio prompts likhungi… 📸",
+      "Aapka product detail mein samajh rahi hoon — brand, type, size, industry — phir 5 professional studio prompts likhungi… 📸",
+  },
+  studio_photo_rejected: {
+    en: "This photo isn’t good enough for a clean studio shot. Please upload a better image for a better result.",
+    hi: "यह photo अच्छे studio shot के लिए सही नहीं है। बेहतर result के लिए कृपया अच्छी photo भेजें।",
+    hinglish:
+      "Yeh photo clean studio shot ke liye theek nahi hai. Better result ke liye please better photo upload karo.",
+  },
+  studio_photo_tips: {
+    en: "Tips for a better photo:\n• Full product visible (not half-cut)\n• No hand covering the product\n• Place on a flat table, good light\n• Camera straight, not too blurry\n\nThen send the new photo and choose Studio shot again 📸",
+    hi: "बेहतर photo के tips:\n• पूरा product दिखे (आधा cut न हो)\n• हाथ product पर न हो\n• साफ टेबल पर रखें, अच्छी रोशनी\n• सीधा और साफ click करें\n\nनई photo भेजकर फिर Studio shot चुनें 📸",
+    hinglish:
+      "Better photo ke tips:\n• Poora product dikhe (aadha cut na ho)\n• Haath product pe na ho\n• Flat table pe rakho, achhi light\n• Seedha aur clear click karo\n\nNayi photo bhejo aur phir Studio shot choose karo 📸",
   },
   studio_pick_prompt: {
     en: "Pick one look below — or write your own prompt.",
