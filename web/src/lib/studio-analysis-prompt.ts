@@ -18,12 +18,20 @@ export type ShadowDirection =
   | "BOTTOM_CENTER"
   | "CENTER";
 
+/** Where the product sits in the merchant's original photo (before re-centering). */
+export type SourceAlignment = "left" | "center" | "right" | "top" | "bottom" | "off_center";
+
 export type StudioApiBlueprint = {
   output_size: string;
   padding: number;
   subject_pose: SubjectPose;
   /** Drives hardcoded padding lock: open lids / tall boxes → 0.20 */
   silhouette: ProductSilhouette;
+  /**
+   * Where the product appears in the SOURCE photo (left/right/etc).
+   * Engine ALWAYS re-centers in the OUTPUT — this field is for Vision awareness only.
+   */
+  source_alignment: SourceAlignment;
   shadow_direction: ShadowDirection | string;
   shadow_intensity: number;
   shadow_softness: number;
@@ -55,6 +63,7 @@ export const DEFAULT_API_BLUEPRINT: StudioApiBlueprint = {
   padding: PADDING_TALL_OPEN,
   subject_pose: "upright",
   silhouette: "tall_open_asymmetrical",
+  source_alignment: "center",
   shadow_direction: "behindLeft",
   shadow_intensity: 0.5,
   shadow_softness: 0.8,
@@ -108,7 +117,12 @@ SECTION III: COMPOSITION, PERSPECTIVE & CANVAS (CRITICAL)
     - Set api_blueprint.silhouette = "tall_open_asymmetrical" for open gift boxes, open lids, tall vertical packs, or irregular silhouettes → engine will FORCE padding = 0.22
     - Set api_blueprint.silhouette = "compact" for closed boxes, bottles, jars → engine will FORCE padding = 0.18
     - Always also set api_blueprint.padding to 0.22 (tall/open) or 0.18 (compact) to match silhouette — do not invent values outside 0.18–0.25
-12. Center alignment: Keep the subject vertically and horizontally centered so the breathing-room gap is distributed evenly at top and bottom (never pushed upward against the top border).
+12. SOURCE ALIGNMENT DETECT + FORCE CENTER (CRITICAL):
+    - First LOOK at where the product sits in the merchant photo: left side, right side, top, bottom, or true center.
+    - Set api_blueprint.source_alignment to one of: "left" | "center" | "right" | "top" | "bottom" | "off_center"
+    - Example: product stuck on the left half of the photo → source_alignment = "left"
+    - NEVER keep the source left/right placement in the studio output. Output MUST always place the product in the exact MIDDLE of the 1000x1000 frame (horizontally AND vertically), with even breathing room on all sides.
+    - Merchant photos are often casually framed (product left-aligned on a table). Your job is to DETECT that misalignment so the engine can re-center it — do not treat source framing as final composition.
 13. Grounded perspective (anti floating): Product sits ON a physical surface with contact shadow. Not tilted floating cutouts.
 14. Canvas Contrast Guard: If packaging is primarily white/light, set canvas_bg_color to "F5F5F5".
 15. Smart Ambient Relighting: enable_relighting true by default; packaging text must remain crisp.
@@ -121,6 +135,7 @@ shadow_direction MUST be one of:
 
 subject_pose MUST be "upright" or "flatlay".
 silhouette MUST be "compact" or "tall_open_asymmetrical".
+source_alignment MUST be "left" | "center" | "right" | "top" | "bottom" | "off_center".
 
 Hard output rules:
 - Return STRICT JSON only. No markdown, no code fences, no commentary outside the JSON object.
@@ -130,6 +145,7 @@ Hard output rules:
 - api_blueprint.export_format = "png"
 - shadow_intensity and shadow_softness are floats from 0.0 to 1.0
 - padding: a float between 0.18 and 0.25 depending on product height to ensure a visible margin gap at the borders (engine locks open/tall boxes to 0.22 and compact products to 0.18)
+- ALWAYS detect source_alignment from the photo. Engine will force middle placement in Photoroom even if source is left/right.
 
 Output strictly as a JSON object with this shape:
 {
@@ -142,6 +158,7 @@ Output strictly as a JSON object with this shape:
     "output_size": "1000x1000",
     "padding": 0.22,
     "silhouette": "compact|tall_open_asymmetrical",
+    "source_alignment": "left|center|right|top|bottom|off_center",
     "subject_pose": "upright|flatlay",
     "shadow_direction": "behindLeft|behindRight|behind|left|right|BOTTOM_CENTER|CENTER",
     "shadow_intensity": number,
@@ -156,7 +173,7 @@ Output strictly as a JSON object with this shape:
 }`;
 
 export const CREATIVE_DIRECTOR_USER_TEXT =
-  "Analyze this merchant product photo as a precision commercial photographer. Detect if the silhouette is tall/open/asymmetrical (e.g. open gift box lid). Enforce visible top/bottom margin gaps with padding between 0.18 and 0.25 (open boxes → 0.22). Keep subject centered. Return strict JSON only.";
+  "Analyze this merchant product photo as a precision commercial photographer. Detect where the product sits in the frame (left/center/right/etc) as source_alignment — then plan for OUTPUT to be dead-center in the middle of the canvas regardless of source placement. Detect if the silhouette is tall/open/asymmetrical (e.g. open gift box lid). Enforce visible top/bottom margin gaps with padding between 0.18 and 0.25 (open boxes → 0.22). Return strict JSON only.";
 
 /**
  * Lifestyle / ad background prompt writer — exact counts & positions only.
@@ -166,7 +183,7 @@ export const AD_BACKGROUND_SYSTEM_PROMPT = `You are a commercial product photogr
 Rules:
 - Describe ONLY the environment: surface material, 1–3 precise props, visible detailed background, lighting direction.
 - Product must look PLANTED on the surface (not floating/tilted). Mention a clear table/counter contact plane.
-- Product centered both horizontally and vertically, occupying about 35–40% of the frame with generous empty margin so lids/tops never touch the frame border (open boxes need ~22% padding margin).
+- Product MUST be dead-center in the frame (both horizontally and vertically) even if the merchant photo had it left- or right-aligned. Occupy about 35–40% of the frame with generous empty margin so lids/tops never touch the frame border (open boxes need ~22% padding margin).
 - Background fully detailed and visible — no blur, no bokeh, no empty gradient.
 - No hands, people, brand names, logos, watermarks, or abstract generative shapes.
 - No repetitive yellow circles, dots, blobs, confetti, or random decorative scatter.
@@ -240,6 +257,8 @@ export function normalizeCreativeDirectorAnalysis(
   const silhouette: ProductSilhouette =
     bp.silhouette === "compact" ? "compact" : "tall_open_asymmetrical";
 
+  const sourceAlignment = normalizeSourceAlignment(bp.source_alignment);
+
   // Engine authority: overwrite any model padding with locked 0.18 / 0.22
   const padding = lockPaddingForSilhouette(silhouette, String(raw.product_name || ""));
 
@@ -270,6 +289,7 @@ export function normalizeCreativeDirectorAnalysis(
       output_size: "1000x1000",
       padding,
       silhouette,
+      source_alignment: sourceAlignment,
       subject_pose: pose,
       shadow_direction: shadowDirection,
       shadow_intensity:
@@ -291,9 +311,37 @@ export function normalizeCreativeDirectorAnalysis(
   };
 }
 
+/** Normalize Vision's source framing label. */
+export function normalizeSourceAlignment(
+  value: unknown,
+): SourceAlignment {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (
+    raw === "left" ||
+    raw === "right" ||
+    raw === "top" ||
+    raw === "bottom" ||
+    raw === "center" ||
+    raw === "off_center"
+  ) {
+    return raw;
+  }
+  if (raw.includes("left")) return "left";
+  if (raw.includes("right")) return "right";
+  if (raw.includes("top")) return "top";
+  if (raw.includes("bottom")) return "bottom";
+  if (raw.includes("off") || raw.includes("mis")) return "off_center";
+  return "center";
+}
+
 /**
  * Build Photoroom multipart field map from api_blueprint.
- * Padding is always re-locked and formatted to avoid overwrite / stringify bugs.
+ * Always re-centers the cutout in the OUTPUT (source left/right framing is ignored).
+ * Official Photoroom params: referenceBox=subjectBox + ignorePaddingAndSnapOnCroppedSides=false
+ * stop edge-snap that keeps left-aligned merchant photos stuck on the left.
  */
 export function blueprintToPhotoroomFields(
   blueprint: StudioApiBlueprint,
@@ -316,12 +364,29 @@ export function blueprintToPhotoroomFields(
       ? blueprint.padding
       : lockedPadding;
 
+  const paddingStr = formatPhotoroomPadding(paddingValue);
+
+  if (blueprint.source_alignment && blueprint.source_alignment !== "center") {
+    console.info(
+      `[studio] source_alignment=${blueprint.source_alignment} → forcing OUTPUT center`,
+    );
+  }
+
   const fields: Record<string, string> = {
     removeBackground: "true",
-    padding: formatPhotoroomPadding(paddingValue),
-    // Even top/bottom gap — do not push product toward the top border
-    verticalAlignment: "center",
+    // Re-center cutout relative to subject box — NEVER keep originalImage framing
+    referenceBox: "subjectBox",
+    // Stop Photoroom from snapping cropped left/right edges to the frame edge
+    ignorePaddingAndSnapOnCroppedSides: "false",
+    // Dead-center on canvas (override any left/right source placement)
     horizontalAlignment: "center",
+    verticalAlignment: "center",
+    padding: paddingStr,
+    // Keep position.* mirrors for older payload paths
+    "position.mode": "custom",
+    "position.padding": paddingStr,
+    "position.verticalAlignment": "center",
+    "position.horizontalAlignment": "center",
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
   };
@@ -372,10 +437,16 @@ export function blueprintToPhotoroomFields(
     }
   }
 
-  // Final guard: padding must always exist as "0.18" or "0.22" and stay centered
-  fields.padding = formatPhotoroomPadding(paddingValue);
-  fields.verticalAlignment = "center";
+  // Final stripper guard — re-lock dead-center placement last
+  fields.referenceBox = "subjectBox";
+  fields.ignorePaddingAndSnapOnCroppedSides = "false";
   fields.horizontalAlignment = "center";
+  fields.verticalAlignment = "center";
+  fields["position.mode"] = "custom";
+  fields["position.padding"] = paddingStr;
+  fields["position.verticalAlignment"] = "center";
+  fields["position.horizontalAlignment"] = "center";
+  fields.padding = paddingStr;
 
   return fields;
 }

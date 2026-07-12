@@ -273,13 +273,20 @@ async function renderWithBlueprint(options: {
   delete withoutShadow["shadow.intensityOverride"];
   delete withoutShadow["shadow.softnessOverride"];
 
+  const paddingStr = formatPhotoroomPadding(
+    lockPaddingForSilhouette(blueprint.silhouette, undefined),
+  );
   const minimal: Record<string, string> = {
     removeBackground: "true",
-    padding: formatPhotoroomPadding(
-      lockPaddingForSilhouette(blueprint.silhouette, undefined),
-    ),
-    verticalAlignment: "center",
+    referenceBox: "subjectBox",
+    ignorePaddingAndSnapOnCroppedSides: "false",
     horizontalAlignment: "center",
+    verticalAlignment: "center",
+    "position.mode": "custom",
+    "position.padding": paddingStr,
+    "position.verticalAlignment": "center",
+    "position.horizontalAlignment": "center",
+    padding: paddingStr,
     outputSize: blueprint.output_size || "1000x1000",
     "export.format": "png",
     "lighting.mode": "ai.auto",

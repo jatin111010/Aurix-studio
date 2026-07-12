@@ -54,6 +54,16 @@ export type PhotoroomEditOptions = {
   uncropMode?: "ai.auto";
   exportFormat?: "png" | "webp" | "jpg";
   padding?: number;
+  /**
+   * Strict placement for AI backgrounds (flat padding is often ignored by scene gen).
+   * When set, sends position.mode=custom + position.padding + alignments.
+   */
+  positionMode?: "custom";
+  positionPadding?: number | string;
+  positionVerticalAlignment?: "center" | "top" | "bottom";
+  positionHorizontalAlignment?: "center" | "left" | "right";
+  verticalAlignment?: "center" | "top" | "bottom";
+  horizontalAlignment?: "center" | "left" | "right";
   /** Tight crop to product subject — die-cut / sticker style */
   outputSize?: "auto" | "originalImage" | "croppedSubject" | string;
 };
@@ -171,7 +181,26 @@ export async function editImage(
     }
   }
 
-  form.append("padding", String(options.padding ?? 0.2));
+  form.append("padding", String(options.padding ?? 0.22));
+
+  // Dead-center cutout — never keep left/right source framing
+  form.append("referenceBox", "subjectBox");
+  form.append("ignorePaddingAndSnapOnCroppedSides", "false");
+  form.append("horizontalAlignment", options.horizontalAlignment ?? "center");
+  form.append("verticalAlignment", options.verticalAlignment ?? "center");
+
+  // Strict placement mirrors
+  const positionPadding = options.positionPadding ?? options.padding ?? 0.22;
+  form.append("position.mode", options.positionMode ?? "custom");
+  form.append("position.padding", String(positionPadding));
+  form.append(
+    "position.verticalAlignment",
+    options.positionVerticalAlignment ?? "center",
+  );
+  form.append(
+    "position.horizontalAlignment",
+    options.positionHorizontalAlignment ?? "center",
+  );
 
   if (options.outputSize) {
     form.append("outputSize", options.outputSize);
@@ -205,6 +234,22 @@ export async function editImageFromFields(
 ): Promise<Buffer> {
   const apiKey = getPhotoroomApiKey();
   const form = new FormData();
+
+  // Re-lock dead-center placement — never keep source left/right framing
+  const pad = (
+    fields["position.padding"] ||
+    fields.padding ||
+    "0.22"
+  ).trim();
+  fields.referenceBox = "subjectBox";
+  fields.ignorePaddingAndSnapOnCroppedSides = "false";
+  fields.horizontalAlignment = "center";
+  fields.verticalAlignment = "center";
+  fields["position.mode"] = "custom";
+  fields["position.padding"] = pad;
+  fields["position.verticalAlignment"] = "center";
+  fields["position.horizontalAlignment"] = "center";
+  fields.padding = pad;
 
   if (imageFile) {
     form.append(
